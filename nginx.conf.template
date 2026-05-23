@@ -1,0 +1,26 @@
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  index index.html;
+
+  location / {
+    try_files $uri /index.html;
+  }
+
+  location /v1/ {
+    proxy_pass ${API_PROXY_PASS}/v1/;
+  }
+
+  location /auth/ {
+    proxy_pass ${API_PROXY_PASS}/auth/;
+  }
+
+  location /health {
+    proxy_pass ${API_PROXY_PASS}/health;
+  }
+
+  location /ready {
+    proxy_pass ${API_PROXY_PASS}/ready;
+  }
+}

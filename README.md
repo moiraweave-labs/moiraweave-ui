@@ -56,6 +56,6 @@ CLI. Override `API_PROXY_PASS` for other deployments.
 
 ## Related Repositories
 
-- [moiraweave-core](https://github.com/moiraweave-labs/moiraweave-core)
+- [moiraweave](https://github.com/moiraweave-labs/moiraweave)
 - [moiraweave-cli](https://github.com/moiraweave-labs/moiraweave-cli)
 - [moiraweave-docs](https://github.com/moiraweave-labs/moiraweave-docs)

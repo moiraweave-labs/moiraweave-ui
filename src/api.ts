@@ -63,6 +63,10 @@ export type AgentMessage = {
   message: string;
   context: Record<string, unknown>;
   created_at: string;
+  run_id?: string | null;
+  run_status?: string | null;
+  latest_event?: RunEvent | null;
+  artifact_count?: number;
 };
 
 export type TokenResponse = {
@@ -98,6 +102,64 @@ export type WorkloadHealth = {
   status: string;
   reason: string;
   deployments: Deployment[];
+};
+
+export type WorkloadTemplateParameter = {
+  name: string;
+  label: string;
+  type: string;
+  required: boolean;
+  default?: unknown;
+  description?: string | null;
+  options: string[];
+};
+
+export type WorkloadTemplate = {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  workload_type: string;
+  tags: string[];
+  parameters: WorkloadTemplateParameter[];
+  manifest?: Record<string, unknown> | null;
+};
+
+export type PreflightCheck = {
+  name: string;
+  status: string;
+  message: string;
+  remediation?: string | null;
+  metadata: Record<string, unknown>;
+};
+
+export type PreflightResponse = {
+  workload_name: string;
+  target: string;
+  status: string;
+  checks: PreflightCheck[];
+};
+
+export type DeploymentOperation = {
+  operation_id: string;
+  action: string;
+  workload_name: string;
+  target: string;
+  status: string;
+  user: string;
+  created_at: string;
+  updated_at?: string | null;
+  completed_at?: string | null;
+  metadata: Record<string, unknown>;
+};
+
+export type DeploymentOperationEvent = {
+  id: string;
+  operation_id: string;
+  timestamp: string;
+  type: string;
+  message: string;
+  data: Record<string, unknown>;
 };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
@@ -136,6 +198,12 @@ export const api = {
     }),
   workloads: () => request<WorkloadInfo[]>("/v1/workloads"),
   workload: (name: string) => request<WorkloadInfo>(`/v1/workloads/${name}`),
+  templates: () => request<WorkloadTemplate[]>("/v1/templates"),
+  createWorkloadFromTemplate: (templateId: string, parameters: Record<string, unknown>) =>
+    request<WorkloadInfo>("/v1/workloads/from-template", {
+      method: "POST",
+      body: JSON.stringify({ template_id: templateId, parameters })
+    }),
   registerWorkload: (manifest: Record<string, unknown>) =>
     request<WorkloadInfo>("/v1/workloads", {
       method: "POST",
@@ -144,6 +212,11 @@ export const api = {
   deployments: (workload?: string) =>
     request<Deployment[]>(`/v1/deployments${workload ? `?workload_name=${workload}` : ""}`),
   workloadHealth: (name: string) => request<WorkloadHealth>(`/v1/workloads/${name}/health`),
+  preflight: (workload: string, target: string, env = "dev") =>
+    request<PreflightResponse>(`/v1/workloads/${workload}/preflight`, {
+      method: "POST",
+      body: JSON.stringify({ target, env })
+    }),
   deploymentPlan: (workload: string, target: string, env = "dev") =>
     request<DeploymentPlan>(
       `/v1/workloads/${workload}/deployment-plan?target=${encodeURIComponent(
@@ -158,6 +231,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body)
     }),
+  deploymentOperation: (body: {
+    action: string;
+    workload_name: string;
+    target: string;
+    env?: string;
+    metadata?: Record<string, unknown>;
+  }) =>
+    request<DeploymentOperation>("/v1/deployment-operations", {
+      method: "POST",
+      body: JSON.stringify(body)
+    }),
+  deploymentOperationEvents: (id: string) =>
+    request<DeploymentOperationEvent[]>(`/v1/deployment-operations/${id}/events`),
   runs: (workload?: string) =>
     request<RunStatus[]>(`/v1/runs${workload ? `?workload_name=${workload}` : ""}`),
   submitRun: (workload: string, payload: Record<string, unknown>) =>
@@ -169,6 +255,19 @@ export const api = {
   cancelRun: (id: string) => request<RunStatus>(`/v1/runs/${id}/cancel`, { method: "POST" }),
   events: (id: string) => request<RunEvent[]>(`/v1/runs/${id}/events`),
   artifacts: (id: string) => request<Artifact[]>(`/v1/runs/${id}/artifacts`),
+  artifactLibrary: (filters: {
+    workload_name?: string;
+    session_id?: string;
+    run_id?: string;
+    content_type?: string;
+  }) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return request<Artifact[]>(`/v1/artifacts${suffix}`);
+  },
   health: () => request<Record<string, unknown>>("/health"),
   ready: () => request<Record<string, unknown>>("/ready"),
   createSession: (agent: string) =>

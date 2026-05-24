@@ -6,21 +6,22 @@ platform.
 The UI talks only to the MoiraWeave API Gateway. It does not connect directly to
 Redis, Postgres, Kubernetes, or agent runtimes.
 
-`moira init` includes this image in the generated local `docker-compose.yml`, so
-the dashboard starts with the rest of the platform through `docker compose up -d`.
+`moira init` includes this image in the generated local `docker-compose.yml`.
+`moira up` starts the dashboard with API, worker, storage, and workload services.
 
 ## Features
 
-- Workload registry and manifest registration
+- Guided workload creation from templates plus advanced manifest registration
 - Run submission, run list, run detail, events, artifacts, and cancellation
-- Agent sessions and chat
+- Agent sessions and chat with run status, latest event, and artifact links
 - Inbound channel simulation for Telegram, Slack, Discord, and webhooks
-- Deployment planning, deployment record management, and gateway health views
+- Operations Center with preflight checks, deployment plans, sync, and health
+- Artifact Library filters by workload, session, run, and content type
 
 The CLI is still the entry point for workspace initialization, local file
 generation, Docker Compose, Helm apply, and platform logs. The UI can request
-deployment plans from the API Gateway, but execution stays with CLI, CI, or a
-future deployment operator.
+preflight checks, deployment plans, and deployment record sync through the API
+Gateway, but host execution stays with CLI, CI, or a future deployment operator.
 
 ## Development
 

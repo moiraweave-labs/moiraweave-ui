@@ -30,10 +30,13 @@ import { Link, NavLink, Route, Routes, useParams } from "react-router-dom";
 import {
   AgentMessage,
   AgentSession,
+  DeploymentOperation,
   DeploymentPlan,
+  PreflightResponse,
   RunEvent,
   RunResponse,
   RunStatus,
+  WorkloadTemplate,
   api,
   clearToken,
   getToken,
@@ -76,7 +79,7 @@ function Shell() {
     { to: "/runs", label: "Runs", icon: Activity },
     { to: "/agents", label: "Agents", icon: Bot },
     { to: "/artifacts", label: "Artifacts", icon: Archive },
-    { to: "/health", label: "Health", icon: Server }
+    { to: "/health", label: "Operations", icon: Server }
   ];
 
   function onTokenChange(next: string) {
@@ -243,7 +246,9 @@ function StateBadge({ state }: { state: string }) {
     starting: "bg-sky-500/10 text-sky-400 border-sky-500/20",
     queued: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     healthy: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    passed: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
     pending: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    warning: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     failed: "bg-red-500/10 text-red-400 border-red-500/20",
     degraded: "bg-red-500/10 text-red-400 border-red-500/20",
     canceled: "bg-slate-500/10 text-slate-400 border-slate-500/20",
@@ -276,13 +281,38 @@ function WorkloadHealthBadge({ name }: { name: string }) {
 function Workloads() {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState(SAMPLE_WORKLOAD);
+  const [templateId, setTemplateId] = useState("demo-agent");
+  const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
   const { data = [], isLoading, error } = useQuery({
     queryKey: ["workloads"],
     queryFn: api.workloads
   });
+  const templates = useQuery({
+    queryKey: ["templates"],
+    queryFn: api.templates
+  });
+  const selectedTemplate = useMemo(
+    () => (templates.data || []).find((item) => item.id === templateId),
+    [templateId, templates.data]
+  );
+  useEffect(() => {
+    if (!selectedTemplate) return;
+    const defaults: Record<string, string> = {};
+    selectedTemplate.parameters.forEach((parameter) => {
+      defaults[parameter.name] = String(parameter.default ?? "");
+    });
+    setTemplateParams(defaults);
+  }, [selectedTemplate]);
   const register = useMutation({
     mutationFn: () => api.registerWorkload(JSON.parse(draft) as Record<string, unknown>),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workloads"] })
+  });
+  const createFromTemplate = useMutation({
+    mutationFn: () => api.createWorkloadFromTemplate(templateId, templateParams),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workloads"] });
+      queryClient.invalidateQueries({ queryKey: ["deployments"] });
+    }
   });
 
   return (
@@ -336,27 +366,105 @@ function Workloads() {
       
       <div className="space-y-4">
         <Panel
-          title="Register Workload"
+          title="Create Workload"
           action={
             <button
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all"
+              disabled={!templateId || createFromTemplate.isPending}
+              onClick={() => createFromTemplate.mutate()}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Create
+            </button>
+          }
+        >
+          <div className="space-y-4 p-5">
+            <div>
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Template</label>
+              <select
+                className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={templateId}
+                onChange={(event) => setTemplateId(event.target.value)}
+              >
+                {(templates.data || []).map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedTemplate && (
+              <TemplateSummary template={selectedTemplate} />
+            )}
+            <div className="grid gap-3">
+              {(selectedTemplate?.parameters || []).map((parameter) => (
+                <div key={parameter.name}>
+                  <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    {parameter.label}
+                  </label>
+                  {parameter.options.length > 0 ? (
+                    <select
+                      className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                      value={templateParams[parameter.name] || ""}
+                      onChange={(event) =>
+                        setTemplateParams((current) => ({
+                          ...current,
+                          [parameter.name]: event.target.value
+                        }))
+                      }
+                    >
+                      {parameter.options.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                      type={parameter.type === "number" ? "number" : "text"}
+                      value={templateParams[parameter.name] || ""}
+                      onChange={(event) =>
+                        setTemplateParams((current) => ({
+                          ...current,
+                          [parameter.name]: event.target.value
+                        }))
+                      }
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+            {createFromTemplate.error && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
+                Workload creation failed.
+              </div>
+            )}
+          </div>
+        </Panel>
+
+        <Panel
+          title="Advanced Manifest"
+          action={
+            <button
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700"
               onClick={() => register.mutate()}
             >
               <Plus className="h-3.5 w-3.5" />
-              Register Manifest
+              Register
             </button>
           }
         >
           <div className="relative">
             <div className="absolute top-2 right-2 z-10 flex gap-2">
-              <button 
+              <button
                 onClick={() => setDraft(SAMPLE_WORKLOAD)}
                 className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-700"
                 title="Reset to default"
               >
                 Reset
               </button>
-              <button 
+              <button
                 onClick={() => navigator.clipboard.writeText(draft)}
                 className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-[10px] text-slate-300 hover:bg-slate-700"
                 title="Copy manifest code"
@@ -365,7 +473,7 @@ function Workloads() {
               </button>
             </div>
             <textarea
-              className="min-h-[460px] w-full resize-y bg-[#050811] p-4 font-mono text-[11px] text-emerald-400/90 border-0 outline-none rounded-b-xl focus:ring-1 focus:ring-slate-800"
+              className="min-h-[320px] w-full resize-y bg-[#050811] p-4 font-mono text-[11px] text-emerald-400/90 border-0 outline-none rounded-b-xl focus:ring-1 focus:ring-slate-800"
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               spellCheck={false}
@@ -381,6 +489,24 @@ function Workloads() {
           )}
         </Panel>
       </div>
+    </div>
+  );
+}
+
+function TemplateSummary({ template }: { template: WorkloadTemplate }) {
+  return (
+    <div className="rounded-lg border border-slate-800/80 bg-[#0b0f19]/50 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
+          {template.workload_type}
+        </span>
+        {template.tags.slice(0, 3).map((tag) => (
+          <span key={tag} className="rounded border border-slate-800 px-2 py-0.5 text-[10px] text-slate-500">
+            {tag}
+          </span>
+        ))}
+      </div>
+      <p className="mt-2 text-xs leading-relaxed text-slate-400">{template.description}</p>
     </div>
   );
 }
@@ -748,7 +874,8 @@ function AgentConsole() {
   const history = useQuery({
     queryKey: ["history", agent, selected?.session_id],
     queryFn: () => api.history(agent, selected!.session_id),
-    enabled: Boolean(agent && selected)
+    enabled: Boolean(agent && selected),
+    refetchInterval: 2500
   });
   const create = useMutation({
     mutationFn: () => api.createSession(agent),
@@ -933,35 +1060,86 @@ function AgentConsole() {
 }
 
 function Artifacts() {
+  const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
+  const [workload, setWorkload] = useState("");
+  const [sessionId, setSessionId] = useState("");
   const [runId, setRunId] = useState("");
+  const [contentType, setContentType] = useState("");
   const artifacts = useQuery({
-    queryKey: ["artifacts", runId],
-    queryFn: () => api.artifacts(runId),
-    enabled: Boolean(runId)
+    queryKey: ["artifact-library", workload, sessionId, runId, contentType],
+    queryFn: () =>
+      api.artifactLibrary({
+        workload_name: workload || undefined,
+        session_id: sessionId || undefined,
+        run_id: runId || undefined,
+        content_type: contentType || undefined
+      }),
+    refetchInterval: 5000
   });
   return (
     <div className="space-y-6">
-      <div className="max-w-md">
-        <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Search by Run ID</label>
-        <input
-          className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3.5 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
-          value={runId}
-          onChange={(event) => setRunId(event.target.value)}
-          placeholder="Enter complete Run ID (e.g. uuid)..."
-        />
-      </div>
+      <Panel title="Artifact Library Filters">
+        <div className="grid gap-3 p-5 md:grid-cols-4">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Workload</label>
+            <select
+              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+              value={workload}
+              onChange={(event) => setWorkload(event.target.value)}
+            >
+              <option value="">All workloads</option>
+              {(workloads.data || []).map((item) => (
+                <option key={item.name} value={item.name}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Session ID</label>
+            <input
+              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+              value={sessionId}
+              onChange={(event) => setSessionId(event.target.value)}
+              placeholder="optional"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Run ID</label>
+            <input
+              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+              value={runId}
+              onChange={(event) => setRunId(event.target.value)}
+              placeholder="optional"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Content Type</label>
+            <input
+              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+              value={contentType}
+              onChange={(event) => setContentType(event.target.value)}
+              placeholder="application/json"
+            />
+          </div>
+        </div>
+      </Panel>
       
       <Panel title="Discovered Artifacts">
         <div className="divide-y divide-slate-800/50">
           {(artifacts.data || []).map((artifact) => (
-            <div key={artifact.id} className="grid gap-2 p-5 text-sm md:grid-cols-[200px_1fr] items-center hover:bg-slate-800/10 transition-colors">
+            <div key={artifact.id} className="grid gap-2 p-5 text-sm md:grid-cols-[180px_120px_140px_1fr] items-center hover:bg-slate-800/10 transition-colors">
               <span className="font-bold text-xs text-slate-200">{artifact.name}</span>
+              <Link className="font-mono text-[10px] font-semibold text-sky-300 hover:underline" to={`/runs/${artifact.run_id}`}>
+                {artifact.run_id.slice(0, 8)}
+              </Link>
+              <span className="text-[10px] text-slate-500">{artifact.content_type || "-"}</span>
               <span className="break-all font-mono text-[10px] text-slate-500">{artifact.uri}</span>
             </div>
           ))}
           {(artifacts.data || []).length === 0 && (
             <div className="p-6 text-center text-xs text-slate-500">
-              {runId ? "No artifacts found for this Run ID" : "Enter a Run ID above to discover artifacts"}
+              No artifacts match the current filters
             </div>
           )}
         </div>
@@ -979,13 +1157,39 @@ function Health() {
   const [endpoint, setEndpoint] = useState("");
   const [metadataDraft, setMetadataDraft] = useState(SAMPLE_DEPLOYMENT_METADATA);
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
+  const [preflight, setPreflight] = useState<PreflightResponse | null>(null);
+  const [operation, setOperation] = useState<DeploymentOperation | null>(null);
   const health = useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 5000 });
   const ready = useQuery({ queryKey: ["ready"], queryFn: api.ready, refetchInterval: 5000 });
   const deployments = useQuery({ queryKey: ["deployments"], queryFn: () => api.deployments(), refetchInterval: 10000 });
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
+  const operationEvents = useQuery({
+    queryKey: ["deployment-operation-events", operation?.operation_id],
+    queryFn: () => api.deploymentOperationEvents(operation!.operation_id),
+    enabled: Boolean(operation)
+  });
+  const preflightMutation = useMutation({
+    mutationFn: () => api.preflight(workload, target, planEnv),
+    onSuccess: (response) => setPreflight(response)
+  });
   const deploymentPlan = useMutation({
     mutationFn: () => api.deploymentPlan(workload, target, planEnv),
     onSuccess: (response) => setPlan(response)
+  });
+  const syncOperation = useMutation({
+    mutationFn: () =>
+      api.deploymentOperation({
+        action: "sync",
+        workload_name: workload,
+        target,
+        env: planEnv,
+        metadata: { status, source: "moiraweave-ui" }
+      }),
+    onSuccess: (response) => {
+      setOperation(response);
+      queryClient.invalidateQueries({ queryKey: ["deployments"] });
+      queryClient.invalidateQueries({ queryKey: ["workload-health", workload] });
+    }
   });
   const recordDeployment = useMutation({
     mutationFn: () =>
@@ -1003,6 +1207,8 @@ function Health() {
 
   useEffect(() => {
     setPlan(null);
+    setPreflight(null);
+    setOperation(null);
   }, [workload, target, planEnv]);
 
   return (
@@ -1012,9 +1218,17 @@ function Health() {
         <HealthTile title="Gateway Readiness" ok={!ready.error} body={ready.data} />
       </div>
       <Panel
-        title="Record Deployment"
+        title="Operations Center"
         action={
           <div className="flex items-center gap-2">
+            <button
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-slate-700 disabled:text-slate-600"
+              disabled={!workload || preflightMutation.isPending}
+              onClick={() => preflightMutation.mutate()}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Preflight
+            </button>
             <button
               className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-slate-700 disabled:text-slate-600"
               disabled={!workload || deploymentPlan.isPending}
@@ -1022,6 +1236,14 @@ function Health() {
             >
               <Terminal className="h-3.5 w-3.5" />
               Plan
+            </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:text-slate-600"
+              disabled={!workload || syncOperation.isPending}
+              onClick={() => syncOperation.mutate()}
+            >
+              <RefreshCcw className="h-3.5 w-3.5" />
+              Sync
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
@@ -1107,6 +1329,28 @@ function Health() {
                 Deployment plan failed. Check target and workload deployment mode.
               </div>
             )}
+            {preflight && (
+              <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Preflight</span>
+                  <StateBadge state={preflight.status} />
+                </div>
+                <div className="space-y-2">
+                  {preflight.checks.map((check) => (
+                    <div key={check.name} className="rounded border border-slate-800 bg-[#050811] p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-slate-300">{check.name}</span>
+                        <StateBadge state={check.status} />
+                      </div>
+                      <div className="mt-1 text-slate-400">{check.message}</div>
+                      {check.remediation && (
+                        <div className="mt-1 text-amber-300">{check.remediation}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {plan && (
               <div className="space-y-3 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
                 <div className="grid gap-2 sm:grid-cols-3">
@@ -1143,6 +1387,22 @@ function Health() {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+            {operation && (
+              <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Metric label="Operation" value={<span className="font-mono text-slate-300">{operation.operation_id.slice(0, 8)}</span>} />
+                  <Metric label="Action" value={<span className="text-slate-300">{operation.action}</span>} />
+                  <Metric label="Status" value={<StateBadge state={operation.status} />} />
+                </div>
+                {(operationEvents.data || []).map((event) => (
+                  <div key={event.id} className="rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-slate-400">
+                    <span className="font-semibold text-sky-300">{event.type}</span>
+                    <span className="mx-2 text-slate-700">/</span>
+                    {event.message}
+                  </div>
+                ))}
               </div>
             )}
           </div>
@@ -1246,6 +1506,29 @@ function MessageBubble({ message }: { message: AgentMessage }) {
           {isUser ? "You" : message.role}
         </div>
         <div className="whitespace-pre-wrap leading-relaxed">{message.message}</div>
+        {message.run_id && (
+          <div className={`mt-3 rounded-lg border px-2.5 py-2 ${isUser ? "border-white/20 bg-white/10" : "border-slate-800 bg-[#090d16]/70"}`}>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                className={`font-mono text-[10px] font-semibold underline-offset-2 hover:underline ${isUser ? "text-white" : "text-sky-300"}`}
+                to={`/runs/${message.run_id}`}
+              >
+                {message.run_id.slice(0, 8)}
+              </Link>
+              {message.run_status && <StateBadge state={message.run_status} />}
+              {message.artifact_count ? (
+                <span className="text-[10px] font-semibold text-slate-300">
+                  {message.artifact_count} artifact{message.artifact_count === 1 ? "" : "s"}
+                </span>
+              ) : null}
+            </div>
+            {message.latest_event && (
+              <div className={`mt-1 text-[10px] ${isUser ? "text-white/75" : "text-slate-500"}`}>
+                {message.latest_event.type}: {message.latest_event.message}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {isUser && (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">

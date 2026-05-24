@@ -82,6 +82,17 @@ export type Deployment = {
   metadata: Record<string, unknown>;
 };
 
+export type DeploymentPlan = {
+  workload_name: string;
+  target: string;
+  mode: string;
+  service_name?: string | null;
+  endpoint?: string | null;
+  files: string[];
+  commands: string[];
+  notes: string[];
+};
+
 export type WorkloadHealth = {
   workload_name: string;
   status: string;
@@ -133,6 +144,12 @@ export const api = {
   deployments: (workload?: string) =>
     request<Deployment[]>(`/v1/deployments${workload ? `?workload_name=${workload}` : ""}`),
   workloadHealth: (name: string) => request<WorkloadHealth>(`/v1/workloads/${name}/health`),
+  deploymentPlan: (workload: string, target: string, env = "dev") =>
+    request<DeploymentPlan>(
+      `/v1/workloads/${workload}/deployment-plan?target=${encodeURIComponent(
+        target
+      )}&env=${encodeURIComponent(env)}`
+    ),
   recordDeployment: (
     workload: string,
     body: { target: string; status: string; endpoint?: string; metadata?: Record<string, unknown> }

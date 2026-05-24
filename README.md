@@ -15,11 +15,12 @@ the dashboard starts with the rest of the platform through `docker compose up -d
 - Run submission, run list, run detail, events, artifacts, and cancellation
 - Agent sessions and chat
 - Inbound channel simulation for Telegram, Slack, Discord, and webhooks
-- Deployment record management and gateway health views
+- Deployment planning, deployment record management, and gateway health views
 
 The CLI is still the entry point for workspace initialization, local file
-generation, Docker Compose, Helm apply, and platform logs. The UI intentionally
-stays on the API Gateway boundary.
+generation, Docker Compose, Helm apply, and platform logs. The UI can request
+deployment plans from the API Gateway, but execution stays with CLI, CI, or a
+future deployment operator.
 
 ## Development
 

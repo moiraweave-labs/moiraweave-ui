@@ -30,6 +30,7 @@ import { Link, NavLink, Route, Routes, useParams } from "react-router-dom";
 import {
   AgentMessage,
   AgentSession,
+  DeploymentPlan,
   RunEvent,
   RunResponse,
   RunStatus,
@@ -973,13 +974,19 @@ function Health() {
   const queryClient = useQueryClient();
   const [workload, setWorkload] = useState("");
   const [target, setTarget] = useState("local");
+  const [planEnv, setPlanEnv] = useState("dev");
   const [status, setStatus] = useState("running");
   const [endpoint, setEndpoint] = useState("");
   const [metadataDraft, setMetadataDraft] = useState(SAMPLE_DEPLOYMENT_METADATA);
+  const [plan, setPlan] = useState<DeploymentPlan | null>(null);
   const health = useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 5000 });
   const ready = useQuery({ queryKey: ["ready"], queryFn: api.ready, refetchInterval: 5000 });
   const deployments = useQuery({ queryKey: ["deployments"], queryFn: () => api.deployments(), refetchInterval: 10000 });
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
+  const deploymentPlan = useMutation({
+    mutationFn: () => api.deploymentPlan(workload, target, planEnv),
+    onSuccess: (response) => setPlan(response)
+  });
   const recordDeployment = useMutation({
     mutationFn: () =>
       api.recordDeployment(workload, {
@@ -994,6 +1001,10 @@ function Health() {
     }
   });
 
+  useEffect(() => {
+    setPlan(null);
+  }, [workload, target, planEnv]);
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
@@ -1003,14 +1014,24 @@ function Health() {
       <Panel
         title="Record Deployment"
         action={
-          <button
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
-            disabled={!workload || recordDeployment.isPending}
-            onClick={() => recordDeployment.mutate()}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Record
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-slate-700 disabled:text-slate-600"
+              disabled={!workload || deploymentPlan.isPending}
+              onClick={() => deploymentPlan.mutate()}
+            >
+              <Terminal className="h-3.5 w-3.5" />
+              Plan
+            </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
+              disabled={!workload || recordDeployment.isPending}
+              onClick={() => recordDeployment.mutate()}
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Record
+            </button>
+          </div>
         }
       >
         <div className="grid gap-4 p-5 lg:grid-cols-[1fr_1fr]">
@@ -1043,6 +1064,15 @@ function Health() {
               </select>
             </div>
             <div>
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Env</label>
+              <input
+                className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={planEnv}
+                onChange={(event) => setPlanEnv(event.target.value)}
+                placeholder="dev"
+              />
+            </div>
+            <div>
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</label>
               <select
                 className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
@@ -1070,6 +1100,49 @@ function Health() {
             {recordDeployment.error && (
               <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400 sm:col-span-2">
                 Deployment record failed. Check JSON and endpoint.
+              </div>
+            )}
+            {deploymentPlan.error && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400 sm:col-span-2">
+                Deployment plan failed. Check target and workload deployment mode.
+              </div>
+            )}
+            {plan && (
+              <div className="space-y-3 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <Metric label="Target" value={<StateBadge state={plan.target} />} />
+                  <Metric label="Service" value={<span className="font-mono text-slate-300">{plan.service_name || "-"}</span>} />
+                  <Metric label="Endpoint" value={<span className="break-all font-mono text-slate-400">{plan.endpoint || "-"}</span>} />
+                </div>
+                {plan.files.length > 0 && (
+                  <div>
+                    <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Files</span>
+                    <div className="space-y-1">
+                      {plan.files.map((file) => (
+                        <code key={file} className="block rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-emerald-300">
+                          {file}
+                        </code>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Commands</span>
+                  <div className="space-y-1">
+                    {plan.commands.map((command) => (
+                      <code key={command} className="block whitespace-pre-wrap rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-sky-300">
+                        {command}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+                {plan.notes.length > 0 && (
+                  <div className="space-y-1 text-[11px] text-slate-400">
+                    {plan.notes.map((note) => (
+                      <div key={note}>{note}</div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

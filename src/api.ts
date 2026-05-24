@@ -21,6 +21,13 @@ export type RunStatus = {
   error?: string | null;
 };
 
+export type RunResponse = {
+  run_id: string;
+  workload_name: string;
+  status: string;
+  created_at: string;
+};
+
 export type RunEvent = {
   id: string;
   run_id: string;
@@ -136,6 +143,11 @@ export const api = {
     }),
   runs: (workload?: string) =>
     request<RunStatus[]>(`/v1/runs${workload ? `?workload_name=${workload}` : ""}`),
+  submitRun: (workload: string, payload: Record<string, unknown>) =>
+    request<RunResponse>(`/v1/workloads/${workload}/runs`, {
+      method: "POST",
+      body: JSON.stringify({ payload })
+    }),
   run: (id: string) => request<RunStatus>(`/v1/runs/${id}`),
   cancelRun: (id: string) => request<RunStatus>(`/v1/runs/${id}/cancel`, { method: "POST" }),
   events: (id: string) => request<RunEvent[]>(`/v1/runs/${id}/events`),

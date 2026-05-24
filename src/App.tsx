@@ -31,6 +31,7 @@ import {
   AgentMessage,
   AgentSession,
   RunEvent,
+  RunResponse,
   RunStatus,
   api,
   clearToken,
@@ -57,6 +58,14 @@ const SAMPLE_WORKLOAD = `{
       "exposedChannels": ["ui", "api"]
     }
   }
+}`;
+
+const SAMPLE_RUN_PAYLOAD = `{
+  "prompt": "Summarize the current workspace status"
+}`;
+
+const SAMPLE_DEPLOYMENT_METADATA = `{
+  "source": "moiraweave-ui"
 }`;
 
 function Shell() {
@@ -377,10 +386,29 @@ function Workloads() {
 
 function Runs() {
   const [workload, setWorkload] = useState("");
+  const [submitWorkload, setSubmitWorkload] = useState("");
+  const [payloadDraft, setPayloadDraft] = useState(SAMPLE_RUN_PAYLOAD);
+  const [submitted, setSubmitted] = useState<RunResponse | null>(null);
+  const queryClient = useQueryClient();
+  const workloads = useQuery({
+    queryKey: ["workloads"],
+    queryFn: api.workloads
+  });
   const { data = [], isFetching, refetch } = useQuery({
     queryKey: ["runs", workload],
     queryFn: () => api.runs(workload || undefined),
     refetchInterval: 3000
+  });
+  const submitRun = useMutation({
+    mutationFn: () =>
+      api.submitRun(
+        submitWorkload,
+        JSON.parse(payloadDraft) as Record<string, unknown>
+      ),
+    onSuccess: (response) => {
+      setSubmitted(response);
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    }
   });
 
   const metrics = useMemo(() => {
@@ -393,6 +421,64 @@ function Runs() {
 
   return (
     <div className="space-y-6">
+      <Panel
+        title="Submit Run"
+        action={
+          <button
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
+            disabled={!submitWorkload || submitRun.isPending}
+            onClick={() => submitRun.mutate()}
+          >
+            <Play className="h-3.5 w-3.5" />
+            Submit
+          </button>
+        }
+      >
+        <div className="grid gap-4 p-5 lg:grid-cols-[280px_1fr]">
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Workload</label>
+              <select
+                className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={submitWorkload}
+                onChange={(event) => setSubmitWorkload(event.target.value)}
+              >
+                <option value="">Select workload...</option>
+                {(workloads.data || []).map((item) => (
+                  <option key={item.name} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="rounded-lg border border-slate-800/70 bg-[#0b0f19]/40 p-3">
+              <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Last Submitted</span>
+              {submitted ? (
+                <Link
+                  className="mt-1 block font-mono text-xs font-semibold text-sky-300 hover:underline"
+                  to={`/runs/${submitted.run_id}`}
+                >
+                  {submitted.run_id.slice(0, 8)}
+                </Link>
+              ) : (
+                <span className="mt-1 block text-xs text-slate-500">-</span>
+              )}
+            </div>
+            {submitRun.error && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
+                Submit failed. Check JSON and workload state.
+              </div>
+            )}
+          </div>
+          <textarea
+            className="min-h-44 w-full resize-y rounded-lg border border-slate-900 bg-[#050811] p-4 font-mono text-[11px] text-sky-400/90 outline-none focus:ring-1 focus:ring-slate-800"
+            value={payloadDraft}
+            onChange={(event) => setPayloadDraft(event.target.value)}
+            spellCheck={false}
+          />
+        </div>
+      </Panel>
+
       {/* Metrics Summary widgets */}
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         <div className="rounded-xl border border-slate-800 bg-[#0e1322]/40 p-4 shadow-card">
@@ -884,15 +970,117 @@ function Artifacts() {
 }
 
 function Health() {
+  const queryClient = useQueryClient();
+  const [workload, setWorkload] = useState("");
+  const [target, setTarget] = useState("local");
+  const [status, setStatus] = useState("running");
+  const [endpoint, setEndpoint] = useState("");
+  const [metadataDraft, setMetadataDraft] = useState(SAMPLE_DEPLOYMENT_METADATA);
   const health = useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 5000 });
   const ready = useQuery({ queryKey: ["ready"], queryFn: api.ready, refetchInterval: 5000 });
   const deployments = useQuery({ queryKey: ["deployments"], queryFn: () => api.deployments(), refetchInterval: 10000 });
+  const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
+  const recordDeployment = useMutation({
+    mutationFn: () =>
+      api.recordDeployment(workload, {
+        target,
+        status,
+        endpoint: endpoint.trim() || undefined,
+        metadata: JSON.parse(metadataDraft) as Record<string, unknown>
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["deployments"] });
+      queryClient.invalidateQueries({ queryKey: ["workload-health", workload] });
+    }
+  });
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
         <HealthTile title="System Health" ok={!health.error} body={health.data} />
         <HealthTile title="Gateway Readiness" ok={!ready.error} body={ready.data} />
       </div>
+      <Panel
+        title="Record Deployment"
+        action={
+          <button
+            className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
+            disabled={!workload || recordDeployment.isPending}
+            onClick={() => recordDeployment.mutate()}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Record
+          </button>
+        }
+      >
+        <div className="grid gap-4 p-5 lg:grid-cols-[1fr_1fr]">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Workload</label>
+              <select
+                className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={workload}
+                onChange={(event) => setWorkload(event.target.value)}
+              >
+                <option value="">Select workload...</option>
+                {(workloads.data || []).map((item) => (
+                  <option key={item.name} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Target</label>
+              <select
+                className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={target}
+                onChange={(event) => setTarget(event.target.value)}
+              >
+                <option value="local">Local</option>
+                <option value="kubernetes">Kubernetes</option>
+                <option value="external">External</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</label>
+              <select
+                className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={status}
+                onChange={(event) => setStatus(event.target.value)}
+              >
+                <option value="generated">Generated</option>
+                <option value="running">Running</option>
+                <option value="applied">Applied</option>
+                <option value="healthy">Healthy</option>
+                <option value="failed">Failed</option>
+                <option value="unhealthy">Unhealthy</option>
+                <option value="lost">Lost</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Endpoint</label>
+              <input
+                className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={endpoint}
+                onChange={(event) => setEndpoint(event.target.value)}
+                placeholder="http://service:port"
+              />
+            </div>
+            {recordDeployment.error && (
+              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400 sm:col-span-2">
+                Deployment record failed. Check JSON and endpoint.
+              </div>
+            )}
+          </div>
+          <textarea
+            className="min-h-32 w-full resize-y rounded-lg border border-slate-900 bg-[#050811] p-4 font-mono text-[11px] text-emerald-400/90 outline-none focus:ring-1 focus:ring-slate-800"
+            value={metadataDraft}
+            onChange={(event) => setMetadataDraft(event.target.value)}
+            spellCheck={false}
+          />
+        </div>
+      </Panel>
       <Panel title="Deployments">
         <div className="divide-y divide-slate-800/50">
           {(deployments.data || []).map((deployment) => (

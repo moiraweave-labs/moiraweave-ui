@@ -12,10 +12,14 @@ the dashboard starts with the rest of the platform through `docker compose up -d
 ## Features
 
 - Workload registry and manifest registration
-- Run list, run detail, events, artifacts, and cancellation
+- Run submission, run list, run detail, events, artifacts, and cancellation
 - Agent sessions and chat
 - Inbound channel simulation for Telegram, Slack, Discord, and webhooks
-- Deployment and gateway health views
+- Deployment record management and gateway health views
+
+The CLI is still the entry point for workspace initialization, local file
+generation, Docker Compose, Helm apply, and platform logs. The UI intentionally
+stays on the API Gateway boundary.
 
 ## Development
 

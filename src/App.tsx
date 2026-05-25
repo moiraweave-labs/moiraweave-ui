@@ -878,6 +878,16 @@ function AgentConsole() {
     enabled: Boolean(agent),
     refetchInterval: 5000
   });
+  useEffect(() => {
+    if (!agent && agents.length > 0) {
+      setAgent(agents[0].name);
+    }
+  }, [agent, agents]);
+  useEffect(() => {
+    if (!selected && sessions.data && sessions.data.length > 0) {
+      setSelected(sessions.data[0]);
+    }
+  }, [selected, sessions.data]);
   const history = useQuery({
     queryKey: ["history", agent, selected?.session_id],
     queryFn: () => api.history(agent, selected!.session_id),

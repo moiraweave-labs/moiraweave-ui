@@ -26,7 +26,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { Link, NavLink, Route, Routes, useParams } from "react-router-dom";
+import { Link, NavLink, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 import {
   AgentMessage,
   AgentSession,
@@ -899,6 +899,20 @@ function AgentConsole() {
       queryClient.invalidateQueries({ queryKey: ["runs"] });
     }
   });
+  const retry = useMutation({
+    mutationFn: (text: string) => api.message(agent, selected!.session_id, text),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["history", agent, selected?.session_id] });
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    }
+  });
+  const cancelRun = useMutation({
+    mutationFn: (runId: string) => api.cancelRun(runId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["history", agent, selected?.session_id] });
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    }
+  });
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -992,7 +1006,12 @@ function AgentConsole() {
         <div className="flex min-h-[500px] flex-col bg-[#0b0f19]/25 rounded-b-xl border-t border-slate-900">
           <div className="flex-1 space-y-4 overflow-y-auto p-5 max-h-[460px]">
             {(history.data || []).map((item) => (
-              <MessageBubble key={item.message_id} message={item} />
+              <MessageBubble
+                key={item.message_id}
+                message={item}
+                onCancel={(runId) => cancelRun.mutate(runId)}
+                onRetry={(text) => retry.mutate(text)}
+              />
             ))}
             {!selected && (
               <div className="flex flex-col items-center justify-center h-full py-16 text-center text-slate-500">
@@ -1033,10 +1052,19 @@ function AgentConsole() {
 
 function Artifacts() {
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
-  const [workload, setWorkload] = useState("");
-  const [sessionId, setSessionId] = useState("");
-  const [runId, setRunId] = useState("");
-  const [contentType, setContentType] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [workload, setWorkload] = useState(() => searchParams.get("workload_name") || "");
+  const [sessionId, setSessionId] = useState(() => searchParams.get("session_id") || "");
+  const [runId, setRunId] = useState(() => searchParams.get("run_id") || "");
+  const [contentType, setContentType] = useState(() => searchParams.get("content_type") || "");
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (workload) next.set("workload_name", workload);
+    if (sessionId) next.set("session_id", sessionId);
+    if (runId) next.set("run_id", runId);
+    if (contentType) next.set("content_type", contentType);
+    setSearchParams(next, { replace: true });
+  }, [contentType, runId, sessionId, setSearchParams, workload]);
   const artifacts = useQuery({
     queryKey: ["artifact-library", workload, sessionId, runId, contentType],
     queryFn: () =>
@@ -1524,8 +1552,21 @@ function Metric({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-function MessageBubble({ message }: { message: AgentMessage }) {
+function MessageBubble({
+  message,
+  onCancel,
+  onRetry
+}: {
+  message: AgentMessage;
+  onCancel?: (runId: string) => void;
+  onRetry?: (text: string) => void;
+}) {
   const isUser = message.role === "user";
+  const canCancel =
+    Boolean(message.run_id) &&
+    ["queued", "starting", "running", "cancel_requested", "cancelling"].includes(
+      message.run_status || ""
+    );
   return (
     <div className={`flex gap-3.5 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
@@ -1565,6 +1606,41 @@ function MessageBubble({ message }: { message: AgentMessage }) {
                 {message.latest_event.type}: {message.latest_event.message}
               </div>
             )}
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <Link
+                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold ${
+                  isUser
+                    ? "border-white/20 bg-white/10 text-white hover:bg-white/15"
+                    : "border-slate-800 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60"
+                }`}
+                to={`/artifacts?run_id=${encodeURIComponent(message.run_id)}`}
+              >
+                <Archive className="h-3 w-3" />
+                Artifacts
+              </Link>
+              {canCancel && onCancel && (
+                <button
+                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold ${
+                    isUser
+                      ? "border-white/20 bg-white/10 text-white hover:bg-white/15"
+                      : "border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/15"
+                  }`}
+                  onClick={() => onCancel(message.run_id!)}
+                >
+                  <CircleStop className="h-3 w-3" />
+                  Cancel
+                </button>
+              )}
+              {isUser && onRetry && (
+                <button
+                  className="inline-flex items-center gap-1 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-semibold text-white hover:bg-white/15"
+                  onClick={() => onRetry(message.message)}
+                >
+                  <RefreshCcw className="h-3 w-3" />
+                  Retry
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

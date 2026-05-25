@@ -860,10 +860,15 @@ function AgentConsole() {
   const [agent, setAgent] = useState("");
   const [selected, setSelected] = useState<AgentSession | null>(null);
   const [message, setMessage] = useState("");
-  const [channel, setChannel] = useState("telegram");
-  const [externalUser, setExternalUser] = useState("");
-  const [channelMessage, setChannelMessage] = useState("");
   const queryClient = useQueryClient();
+  const selectedAgent = useMemo(
+    () => agents.find((item) => item.name === agent),
+    [agent, agents]
+  );
+  const channels = useMemo(
+    () => agentChannels(selectedAgent?.manifest),
+    [selectedAgent]
+  );
   
   const sessions = useQuery({
     queryKey: ["sessions", agent],
@@ -889,17 +894,6 @@ function AgentConsole() {
     onSuccess: () => {
       setMessage("");
       queryClient.invalidateQueries({ queryKey: ["history", agent, selected?.session_id] });
-      queryClient.invalidateQueries({ queryKey: ["runs"] });
-    }
-  });
-  const inbound = useMutation({
-    mutationFn: () => api.channelMessage(channel, agent, externalUser, channelMessage),
-    onSuccess: (response) => {
-      setChannelMessage("");
-      const sessionId = String(response.session_id || "");
-      const session = (sessions.data || []).find((item) => item.session_id === sessionId);
-      if (session) setSelected(session);
-      queryClient.invalidateQueries({ queryKey: ["sessions", agent] });
       queryClient.invalidateQueries({ queryKey: ["runs"] });
     }
   });
@@ -971,47 +965,23 @@ function AgentConsole() {
             )}
           </div>
 
-          <form
-            className="space-y-2 border-t border-slate-800 pt-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (agent && externalUser.trim() && channelMessage.trim()) inbound.mutate();
-            }}
-          >
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Inbound Channel</span>
-            <div className="grid grid-cols-2 gap-2">
-              <select
-                className="rounded-lg border border-slate-800 bg-[#090d16] px-2 py-2 text-xs text-slate-200 outline-none"
-                value={channel}
-                onChange={(event) => setChannel(event.target.value)}
-              >
-                <option value="telegram">Telegram</option>
-                <option value="slack">Slack</option>
-                <option value="discord">Discord</option>
-                <option value="webhook">Webhook</option>
-              </select>
-              <input
-                className="rounded-lg border border-slate-800 bg-[#090d16] px-2 py-2 text-xs text-slate-200 outline-none"
-                value={externalUser}
-                onChange={(event) => setExternalUser(event.target.value)}
-                placeholder="External user"
-              />
+          <div className="space-y-3 border-t border-slate-800 pt-4">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">Channels</span>
+            <div className="rounded-lg border border-slate-800 bg-[#090d16]/60 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">MoiraWeave</span>
+                <span className="text-[10px] text-slate-500">API Gateway</span>
+              </div>
+              <ChannelPills channels={channels.exposed} empty="No declared channels" tone="emerald" />
             </div>
-            <input
-              className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-2 py-2 text-xs text-slate-200 outline-none"
-              value={channelMessage}
-              onChange={(event) => setChannelMessage(event.target.value)}
-              placeholder="Simulate inbound message"
-              disabled={!agent}
-            />
-            <button
-              className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-200 disabled:opacity-50"
-              disabled={!agent || !externalUser.trim() || !channelMessage.trim()}
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-              Dispatch Inbound
-            </button>
-          </form>
+            <div className="rounded-lg border border-slate-800 bg-[#090d16]/60 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Runtime-Owned</span>
+                <span className="text-[10px] text-slate-500">External</span>
+              </div>
+              <ChannelPills channels={channels.externalOwned} empty="None" tone="amber" />
+            </div>
+          </div>
         </div>
       </Panel>
 
@@ -1539,6 +1509,36 @@ function MessageBubble({ message }: { message: AgentMessage }) {
   );
 }
 
+function ChannelPills({
+  channels,
+  empty,
+  tone
+}: {
+  channels: string[];
+  empty: string;
+  tone: "emerald" | "amber";
+}) {
+  const classes =
+    tone === "amber"
+      ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
+      : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+  if (!channels.length) {
+    return <div className="mt-2 text-xs text-slate-600">{empty}</div>;
+  }
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {channels.map((channel) => (
+        <span
+          key={channel}
+          className={`rounded-md border px-2 py-1 text-[10px] font-semibold ${classes}`}
+        >
+          {channel}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function RowMessage({ colSpan, text }: { colSpan: number; text: string }) {
   return (
     <tr>
@@ -1569,6 +1569,32 @@ function agentAdapter(manifest: Record<string, unknown>): string | null {
   if (!agent || typeof agent !== "object") return null;
   const adapter = (agent as Record<string, unknown>).adapter;
   return typeof adapter === "string" ? adapter : null;
+}
+
+function agentChannels(manifest?: Record<string, unknown>): {
+  exposed: string[];
+  externalOwned: string[];
+} {
+  const spec = manifest?.spec;
+  if (!spec || typeof spec !== "object") {
+    return { exposed: [], externalOwned: [] };
+  }
+  const agent = (spec as Record<string, unknown>).agent;
+  if (!agent || typeof agent !== "object") {
+    return { exposed: [], externalOwned: [] };
+  }
+  const data = agent as Record<string, unknown>;
+  return {
+    exposed: stringList(data.exposedChannels),
+    externalOwned: stringList(data.externalOwnedChannels)
+  };
+}
+
+function stringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => String(item).trim())
+    .filter((item) => item.length > 0);
 }
 
 export default function App() {

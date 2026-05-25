@@ -14,7 +14,7 @@ Redis, Postgres, Kubernetes, or agent runtimes.
 - Guided workload creation from templates plus advanced manifest registration
 - Run submission, run list, run detail, events, artifacts, and cancellation
 - Agent sessions and chat with run status, latest event, and artifact links
-- Inbound channel simulation for Telegram, Slack, Discord, and webhooks
+- Channel ownership view for UI/API and runtime-owned integrations
 - Operations Center with preflight checks, deployment plans, sync, and health
 - Artifact Library filters by workload, session, run, and content type
 

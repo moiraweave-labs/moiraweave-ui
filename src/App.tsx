@@ -1135,6 +1135,12 @@ function Health() {
   const ready = useQuery({ queryKey: ["ready"], queryFn: api.ready, refetchInterval: 5000 });
   const deployments = useQuery({ queryKey: ["deployments"], queryFn: () => api.deployments(), refetchInterval: 10000 });
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
+  const selectedWorkloadHealth = useQuery({
+    queryKey: ["workload-health", workload],
+    queryFn: () => api.workloadHealth(workload),
+    enabled: Boolean(workload),
+    refetchInterval: 10000
+  });
   const secretInventory = useQuery({
     queryKey: ["secrets", workload || "all"],
     queryFn: () => api.secrets(workload || undefined),
@@ -1306,6 +1312,24 @@ function Health() {
                 Deployment plan failed. Check target and workload deployment mode.
               </div>
             )}
+            {selectedWorkloadHealth.data && (
+              <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Workload Health</span>
+                  <StateBadge state={selectedWorkloadHealth.data.status} />
+                </div>
+                <div className="text-slate-400">{selectedWorkloadHealth.data.reason}</div>
+                {selectedWorkloadHealth.data.recommendations.length > 0 && (
+                  <div className="space-y-1">
+                    {selectedWorkloadHealth.data.recommendations.map((item) => (
+                      <div key={item} className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200">
+                        {item}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Secret Inventory</span>
@@ -1341,6 +1365,14 @@ function Health() {
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Preflight</span>
                   <StateBadge state={preflight.status} />
                 </div>
+                {preflight.recommendations.length > 0 && (
+                  <div className="space-y-1 rounded border border-amber-500/20 bg-amber-500/10 p-2">
+                    <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-200">Recommended Actions</span>
+                    {preflight.recommendations.map((item) => (
+                      <div key={item} className="mt-1 text-[10px] text-amber-100">{item}</div>
+                    ))}
+                  </div>
+                )}
                 <div className="space-y-2">
                   {preflight.checks.map((check) => (
                     <div key={check.name} className="rounded border border-slate-800 bg-[#050811] p-2">

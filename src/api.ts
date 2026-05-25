@@ -102,6 +102,7 @@ export type WorkloadHealth = {
   status: string;
   reason: string;
   deployments: Deployment[];
+  recommendations: string[];
 };
 
 export type WorkloadTemplateParameter = {
@@ -138,6 +139,7 @@ export type PreflightResponse = {
   target: string;
   status: string;
   checks: PreflightCheck[];
+  recommendations: string[];
 };
 
 export type SecretInventoryItem = {

@@ -249,6 +249,8 @@ function StateBadge({ state }: { state: string }) {
     passed: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
     pending: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     warning: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+    present: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    missing: "bg-red-500/10 text-red-400 border-red-500/20",
     failed: "bg-red-500/10 text-red-400 border-red-500/20",
     degraded: "bg-red-500/10 text-red-400 border-red-500/20",
     canceled: "bg-slate-500/10 text-slate-400 border-slate-500/20",
@@ -1133,6 +1135,11 @@ function Health() {
   const ready = useQuery({ queryKey: ["ready"], queryFn: api.ready, refetchInterval: 5000 });
   const deployments = useQuery({ queryKey: ["deployments"], queryFn: () => api.deployments(), refetchInterval: 10000 });
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
+  const secretInventory = useQuery({
+    queryKey: ["secrets", workload || "all"],
+    queryFn: () => api.secrets(workload || undefined),
+    refetchInterval: 10000
+  });
   const operationEvents = useQuery({
     queryKey: ["deployment-operation-events", operation?.operation_id],
     queryFn: () => api.deploymentOperationEvents(operation!.operation_id),
@@ -1299,6 +1306,35 @@ function Health() {
                 Deployment plan failed. Check target and workload deployment mode.
               </div>
             )}
+            <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Secret Inventory</span>
+                {secretInventory.data && <StateBadge state={secretInventory.data.status} />}
+              </div>
+              {secretInventory.isLoading && <div className="text-slate-500">Loading required names...</div>}
+              {secretInventory.error && <div className="text-red-400">Unable to load secret inventory.</div>}
+              {secretInventory.data && secretInventory.data.secrets.length === 0 && (
+                <div className="text-slate-500">No required secrets declared.</div>
+              )}
+              {secretInventory.data && secretInventory.data.secrets.length > 0 && (
+                <div className="space-y-1.5">
+                  {secretInventory.data.secrets.map((secret) => (
+                    <div key={secret.name} className="flex items-start justify-between gap-3 rounded border border-slate-800 bg-[#050811] p-2">
+                      <div className="min-w-0">
+                        <div className="break-all font-mono text-[11px] text-slate-200">{secret.name}</div>
+                        <div className="mt-1 text-[10px] text-slate-500">
+                          {secret.workloads.join(", ")} - {secret.source}
+                        </div>
+                        {!secret.present && secret.remediation && (
+                          <div className="mt-1 text-[10px] text-amber-300">{secret.remediation}</div>
+                        )}
+                      </div>
+                      <StateBadge state={secret.present ? "present" : "missing"} />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
             {preflight && (
               <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
                 <div className="flex items-center justify-between">

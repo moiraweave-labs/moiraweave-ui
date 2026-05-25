@@ -140,6 +140,22 @@ export type PreflightResponse = {
   checks: PreflightCheck[];
 };
 
+export type SecretInventoryItem = {
+  name: string;
+  present: boolean;
+  source: string;
+  workloads: string[];
+  references: string[];
+  remediation?: string | null;
+};
+
+export type SecretInventory = {
+  status: string;
+  total: number;
+  missing: number;
+  secrets: SecretInventoryItem[];
+};
+
 export type DeploymentOperation = {
   operation_id: string;
   action: string;
@@ -199,6 +215,10 @@ export const api = {
   workloads: () => request<WorkloadInfo[]>("/v1/workloads"),
   workload: (name: string) => request<WorkloadInfo>(`/v1/workloads/${name}`),
   templates: () => request<WorkloadTemplate[]>("/v1/templates"),
+  secrets: (workload?: string) =>
+    request<SecretInventory>(
+      `/v1/secrets${workload ? `?workload_name=${encodeURIComponent(workload)}` : ""}`
+    ),
   createWorkloadFromTemplate: (templateId: string, parameters: Record<string, unknown>) =>
     request<WorkloadInfo>("/v1/workloads/from-template", {
       method: "POST",

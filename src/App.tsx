@@ -454,7 +454,7 @@ function Workloads() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Link
                     className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-200 hover:bg-emerald-500/15"
-                    to="/health"
+                    to={`/health?workload=${encodeURIComponent(createdWorkload.name)}`}
                   >
                     <Server className="h-3 w-3" />
                     Run preflight
@@ -462,7 +462,7 @@ function Workloads() {
                   {createdWorkload.type === "agent-service" && (
                     <Link
                       className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-200 hover:bg-emerald-500/15"
-                      to="/agents"
+                      to={`/agents?agent=${encodeURIComponent(createdWorkload.name)}`}
                     >
                       <Bot className="h-3 w-3" />
                       Open agent console
@@ -916,13 +916,18 @@ function AgentConsole() {
     () => (workloads.data || []).filter((item) => item.type === "agent-service"),
     [workloads.data]
   );
-  const [agent, setAgent] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedAgent = searchParams.get("agent") || "";
+  const [agent, setAgent] = useState(() => requestedAgent);
   const [selected, setSelected] = useState<AgentSession | null>(null);
   const [message, setMessage] = useState("");
   const queryClient = useQueryClient();
   const selectedAgent = useMemo(
     () => agents.find((item) => item.name === agent),
     [agent, agents]
+  );
+  const requestedAgentKnown = Boolean(
+    requestedAgent && agents.some((item) => item.name === requestedAgent)
   );
   const channels = useMemo(
     () => agentChannels(selectedAgent?.manifest),
@@ -936,10 +941,18 @@ function AgentConsole() {
     refetchInterval: 5000
   });
   useEffect(() => {
-    if (!agent && agents.length > 0) {
+    if (requestedAgentKnown && agent !== requestedAgent) {
+      setAgent(requestedAgent);
+      setSelected(null);
+    }
+  }, [agent, requestedAgent, requestedAgentKnown]);
+  useEffect(() => {
+    if (!agent && agents.length > 0 && !requestedAgentKnown) {
+      const firstAgent = agents[0].name;
+      setSearchParams({ agent: firstAgent }, { replace: true });
       setAgent(agents[0].name);
     }
-  }, [agent, agents]);
+  }, [agent, agents, requestedAgentKnown, setSearchParams]);
   useEffect(() => {
     if (!selected && sessions.data && sessions.data.length > 0) {
       setSelected(sessions.data[0]);
@@ -1009,8 +1022,10 @@ function AgentConsole() {
               className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 focus:border-slate-700 outline-none"
               value={agent}
               onChange={(event) => {
-                setAgent(event.target.value);
+                const nextAgent = event.target.value;
+                setAgent(nextAgent);
                 setSelected(null);
+                setSearchParams(nextAgent ? { agent: nextAgent } : {}, { replace: true });
               }}
             >
               <option value="">Select agent...</option>
@@ -1365,7 +1380,9 @@ function formatBytes(value?: number | null): string {
 
 function Health() {
   const queryClient = useQueryClient();
-  const [workload, setWorkload] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedWorkload = searchParams.get("workload") || "";
+  const [workload, setWorkload] = useState(() => requestedWorkload);
   const [target, setTarget] = useState("local");
   const [planEnv, setPlanEnv] = useState("dev");
   const [status, setStatus] = useState("running");
@@ -1443,6 +1460,22 @@ function Health() {
     setPreflight(null);
     setOperation(null);
   }, [workload, target, planEnv]);
+  useEffect(() => {
+    if (requestedWorkload && workload !== requestedWorkload) {
+      setWorkload(requestedWorkload);
+    }
+  }, [requestedWorkload, workload]);
+
+  function selectWorkload(nextWorkload: string) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextWorkload) {
+      nextParams.set("workload", nextWorkload);
+    } else {
+      nextParams.delete("workload");
+    }
+    setWorkload(nextWorkload);
+    setSearchParams(nextParams, { replace: true });
+  }
 
   return (
     <div className="space-y-6">
@@ -1496,7 +1529,7 @@ function Health() {
               <select
                 className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
                 value={workload}
-                onChange={(event) => setWorkload(event.target.value)}
+                onChange={(event) => selectWorkload(event.target.value)}
               >
                 <option value="">Select workload...</option>
                 {(workloads.data || []).map((item) => (

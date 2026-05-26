@@ -28,6 +28,15 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { Link, NavLink, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 import {
+  WorkloadTemplate,
+  api,
+  clearToken,
+  getToken,
+  setToken,
+  streamRunEvents
+} from "./api";
+import type {
+  Artifact,
   AgentMessage,
   AgentSession,
   DeploymentOperation,
@@ -35,13 +44,7 @@ import {
   PreflightResponse,
   RunEvent,
   RunResponse,
-  RunStatus,
-  WorkloadTemplate,
-  api,
-  clearToken,
-  getToken,
-  setToken,
-  streamRunEvents
+  RunStatus
 } from "./api";
 
 const SAMPLE_WORKLOAD = `{
@@ -724,6 +727,7 @@ function RunDetail() {
   const { runId = "" } = useParams();
   const queryClient = useQueryClient();
   const [streamedEvents, setStreamedEvents] = useState<RunEvent[]>([]);
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   
   const run = useQuery({
     queryKey: ["run", runId],
@@ -759,6 +763,24 @@ function RunDetail() {
 
   const timeline = mergeEvents(events.data || [], streamedEvents);
   const current = run.data;
+  const producedArtifacts = artifacts.data || [];
+  const selectedArtifact = useMemo(
+    () =>
+      producedArtifacts.find((artifact) => artifact.id === selectedArtifactId) ||
+      producedArtifacts[0] ||
+      null,
+    [producedArtifacts, selectedArtifactId]
+  );
+
+  useEffect(() => {
+    if (producedArtifacts.length === 0) {
+      setSelectedArtifactId(null);
+      return;
+    }
+    if (!producedArtifacts.some((artifact) => artifact.id === selectedArtifactId)) {
+      setSelectedArtifactId(producedArtifacts[0].id);
+    }
+  }, [producedArtifacts, selectedArtifactId]);
 
   // Custom function to return styled icons for each event type
   const getEventIcon = (type: string) => {
@@ -837,17 +859,26 @@ function RunDetail() {
 
         <Panel title="Produced Artifacts">
           <div className="divide-y divide-slate-800/60 max-h-96 overflow-y-auto">
-            {(artifacts.data || []).map((artifact) => (
-              <div key={artifact.id} className="p-4 hover:bg-slate-800/10 transition-colors">
+            {producedArtifacts.map((artifact) => (
+              <button
+                key={artifact.id}
+                className={`block w-full p-4 text-left transition-colors ${
+                  selectedArtifact?.id === artifact.id
+                    ? "bg-emerald-500/5"
+                    : "hover:bg-slate-800/10"
+                }`}
+                onClick={() => setSelectedArtifactId(artifact.id)}
+              >
                 <div className="font-semibold text-xs text-slate-200">{artifact.name}</div>
                 <div className="break-all font-mono text-[10px] text-slate-500 mt-1">{artifact.uri}</div>
-              </div>
+              </button>
             ))}
-            {(artifacts.data || []).length === 0 && (
+            {producedArtifacts.length === 0 && (
               <div className="p-5 text-center text-xs text-slate-500">No artifacts generated</div>
             )}
           </div>
         </Panel>
+        {selectedArtifact && <ArtifactDetails artifact={selectedArtifact} />}
       </div>
     </div>
   );
@@ -1067,6 +1098,7 @@ function Artifacts() {
   const [sessionId, setSessionId] = useState(() => searchParams.get("session_id") || "");
   const [runId, setRunId] = useState(() => searchParams.get("run_id") || "");
   const [contentType, setContentType] = useState(() => searchParams.get("content_type") || "");
+  const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   useEffect(() => {
     const next = new URLSearchParams();
     if (workload) next.set("workload_name", workload);
@@ -1086,6 +1118,23 @@ function Artifacts() {
       }),
     refetchInterval: 5000
   });
+  const discoveredArtifacts = artifacts.data || [];
+  const selectedArtifact = useMemo(
+    () =>
+      discoveredArtifacts.find((artifact) => artifact.id === selectedArtifactId) ||
+      discoveredArtifacts[0] ||
+      null,
+    [discoveredArtifacts, selectedArtifactId]
+  );
+  useEffect(() => {
+    if (discoveredArtifacts.length === 0) {
+      setSelectedArtifactId(null);
+      return;
+    }
+    if (!discoveredArtifacts.some((artifact) => artifact.id === selectedArtifactId)) {
+      setSelectedArtifactId(discoveredArtifacts[0].id);
+    }
+  }, [discoveredArtifacts, selectedArtifactId]);
   return (
     <div className="space-y-6">
       <Panel title="Artifact Library Filters">
@@ -1135,27 +1184,123 @@ function Artifacts() {
         </div>
       </Panel>
       
-      <Panel title="Discovered Artifacts">
-        <div className="divide-y divide-slate-800/50">
-          {(artifacts.data || []).map((artifact) => (
-            <div key={artifact.id} className="grid gap-2 p-5 text-sm md:grid-cols-[180px_120px_140px_1fr] items-center hover:bg-slate-800/10 transition-colors">
-              <span className="font-bold text-xs text-slate-200">{artifact.name}</span>
-              <Link className="font-mono text-[10px] font-semibold text-sky-300 hover:underline" to={`/runs/${artifact.run_id}`}>
+      <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
+        <Panel title="Discovered Artifacts">
+          <div className="divide-y divide-slate-800/50">
+            {discoveredArtifacts.map((artifact) => (
+              <button
+                key={artifact.id}
+                className={`grid w-full items-center gap-2 p-5 text-left text-sm transition-colors md:grid-cols-[180px_120px_140px_1fr] ${
+                  selectedArtifact?.id === artifact.id
+                    ? "bg-emerald-500/5"
+                    : "hover:bg-slate-800/10"
+                }`}
+                onClick={() => setSelectedArtifactId(artifact.id)}
+              >
+                <span className="font-bold text-xs text-slate-200">{artifact.name}</span>
+                <span className="font-mono text-[10px] font-semibold text-sky-300">
+                  {artifact.run_id.slice(0, 8)}
+                </span>
+                <span className="text-[10px] text-slate-500">{artifact.content_type || "-"}</span>
+                <span className="break-all font-mono text-[10px] text-slate-500">{artifact.uri}</span>
+              </button>
+            ))}
+            {discoveredArtifacts.length === 0 && (
+              <div className="p-6 text-center text-xs text-slate-500">
+                No artifacts match the current filters
+              </div>
+            )}
+          </div>
+        </Panel>
+        <div className="space-y-6">
+          {selectedArtifact ? (
+            <ArtifactDetails artifact={selectedArtifact} />
+          ) : (
+            <Panel title="Artifact Details">
+              <div className="p-6 text-center text-xs text-slate-500">
+                Select an artifact to inspect metadata
+              </div>
+            </Panel>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ArtifactDetails({ artifact }: { artifact: Artifact }) {
+  const metadata = artifact.metadata || {};
+  const metadataText = JSON.stringify(metadata, null, 2);
+  const hasMetadata = Object.keys(metadata).length > 0;
+  return (
+    <Panel
+      title="Artifact Details"
+      action={
+        <div className="flex gap-2">
+          <button
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[10px] font-semibold text-slate-200 hover:bg-slate-700"
+            onClick={() => void navigator.clipboard.writeText(artifact.uri)}
+          >
+            <Clipboard className="h-3 w-3" />
+            URI
+          </button>
+          <button
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[10px] font-semibold text-slate-200 hover:bg-slate-700"
+            onClick={() => void navigator.clipboard.writeText(metadataText)}
+          >
+            <Clipboard className="h-3 w-3" />
+            Metadata
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-4 p-5 text-xs">
+        <div>
+          <div className="font-bold text-slate-200">{artifact.name}</div>
+          <div className="mt-1 break-all font-mono text-[10px] text-slate-500">{artifact.uri}</div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Metric
+            label="Run"
+            value={
+              <Link className="font-mono text-sky-300 hover:underline" to={`/runs/${artifact.run_id}`}>
                 {artifact.run_id.slice(0, 8)}
               </Link>
-              <span className="text-[10px] text-slate-500">{artifact.content_type || "-"}</span>
-              <span className="break-all font-mono text-[10px] text-slate-500">{artifact.uri}</span>
-            </div>
-          ))}
-          {(artifacts.data || []).length === 0 && (
-            <div className="p-6 text-center text-xs text-slate-500">
-              No artifacts match the current filters
+            }
+          />
+          <Metric label="Type" value={<span className="text-slate-300">{artifact.content_type || "-"}</span>} />
+          <Metric label="Size" value={<span className="text-slate-300">{formatBytes(artifact.size_bytes)}</span>} />
+          <Metric label="Created" value={<span className="text-slate-400">{formatDate(artifact.created_at)}</span>} />
+        </div>
+        <div>
+          <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Metadata Preview
+          </span>
+          {hasMetadata ? (
+            <pre className="max-h-72 overflow-auto rounded-lg border border-slate-900 bg-[#050811] p-4 font-mono text-[10px] leading-normal text-emerald-400/90">
+              {metadataText}
+            </pre>
+          ) : (
+            <div className="rounded-lg border border-slate-800 bg-[#050811] p-4 text-center text-xs text-slate-500">
+              No artifact metadata recorded
             </div>
           )}
         </div>
-      </Panel>
-    </div>
+      </div>
+    </Panel>
   );
+}
+
+function formatBytes(value?: number | null): string {
+  if (value === null || value === undefined) return "-";
+  if (value < 1024) return `${value} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let amount = value / 1024;
+  for (const unit of units) {
+    if (amount < 1024) return `${amount.toFixed(amount >= 10 ? 0 : 1)} ${unit}`;
+    amount /= 1024;
+  }
+  return `${amount.toFixed(0)} PB`;
 }
 
 function Health() {

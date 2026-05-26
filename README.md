@@ -11,9 +11,11 @@ Redis, Postgres, Kubernetes, or agent runtimes.
 
 ## Features
 
-- Guided workload creation from templates plus advanced manifest registration
+- Guided workload creation from templates plus next-step actions and advanced
+  manifest registration
 - Run submission, run list, run detail, events, artifacts, and cancellation
-- Agent sessions and chat with run status, latest event, and artifact links
+- Agent sessions and chat with first-session CTAs, run status, latest event, and
+  artifact links
 - Channel ownership view for UI/API and runtime-owned integrations
 - Operations Center with preflight checks, deployment plans, sync, and health
 - Artifact Library filters by workload, session, run, and content type, with

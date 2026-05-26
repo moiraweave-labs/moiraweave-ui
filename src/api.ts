@@ -264,6 +264,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body)
     }),
+  deploymentOperations: (filters: {
+    workload_name?: string;
+    target?: string;
+    status?: string;
+    action?: string;
+  } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return request<DeploymentOperation[]>(`/v1/deployment-operations${suffix}`);
+  },
   deploymentOperationEvents: (id: string) =>
     request<DeploymentOperationEvent[]>(`/v1/deployment-operations/${id}/events`),
   runs: (workload?: string) =>

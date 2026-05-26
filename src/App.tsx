@@ -1172,6 +1172,12 @@ function Health() {
   const health = useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 5000 });
   const ready = useQuery({ queryKey: ["ready"], queryFn: api.ready, refetchInterval: 5000 });
   const deployments = useQuery({ queryKey: ["deployments"], queryFn: () => api.deployments(), refetchInterval: 10000 });
+  const deploymentOperations = useQuery({
+    queryKey: ["deployment-operations", workload || "all"],
+    queryFn: () =>
+      api.deploymentOperations({ workload_name: workload || undefined }),
+    refetchInterval: 10000
+  });
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
   const selectedWorkloadHealth = useQuery({
     queryKey: ["workload-health", workload],
@@ -1209,6 +1215,7 @@ function Health() {
     onSuccess: (response) => {
       setOperation(response);
       queryClient.invalidateQueries({ queryKey: ["deployments"] });
+      queryClient.invalidateQueries({ queryKey: ["deployment-operations"] });
       queryClient.invalidateQueries({ queryKey: ["workload-health", workload] });
     }
   });
@@ -1502,6 +1509,34 @@ function Health() {
           ))}
           {(deployments.data || []).length === 0 && (
             <div className="p-6 text-center text-xs text-slate-500">No deployment records yet</div>
+          )}
+        </div>
+      </Panel>
+      <Panel title="Deployment Operations">
+        <div className="divide-y divide-slate-800/50">
+          {(deploymentOperations.data || []).map((item) => (
+            <button
+              key={item.operation_id}
+              className={`grid w-full gap-3 p-5 text-left text-sm transition-colors md:grid-cols-[110px_1fr_120px_120px_160px] ${
+                operation?.operation_id === item.operation_id
+                  ? "bg-emerald-500/5"
+                  : "hover:bg-slate-800/10"
+              }`}
+              onClick={() => setOperation(item)}
+            >
+              <span className="font-mono text-[10px] font-semibold text-sky-300">
+                {item.operation_id.slice(0, 8)}
+              </span>
+              <span className="font-bold text-slate-200">{item.workload_name}</span>
+              <span className="text-xs text-slate-400">{item.action}</span>
+              <StateBadge state={item.status} />
+              <span className="text-[10px] text-slate-500">{formatDate(item.created_at)}</span>
+            </button>
+          ))}
+          {(deploymentOperations.data || []).length === 0 && (
+            <div className="p-6 text-center text-xs text-slate-500">
+              No deployment operations recorded
+            </div>
           )}
         </div>
       </Panel>

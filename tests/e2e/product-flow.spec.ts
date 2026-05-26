@@ -125,7 +125,7 @@ async function mockApi(page: Page) {
 
     if (path === "/v1/agents/demo-agent/sessions" && method === "POST") {
       const session = {
-        session_id: "session-1",
+        session_id: "session1",
         agent_name: "demo-agent",
         status: "active",
         created_at: "2026-05-26T08:00:00+00:00"
@@ -136,7 +136,7 @@ async function mockApi(page: Page) {
     }
 
     if (
-      path === "/v1/agents/demo-agent/sessions/session-1/messages" &&
+      path === "/v1/agents/demo-agent/sessions/session1/messages" &&
       method === "GET"
     ) {
       await json(history);
@@ -144,13 +144,13 @@ async function mockApi(page: Page) {
     }
 
     if (
-      path === "/v1/agents/demo-agent/sessions/session-1/messages" &&
+      path === "/v1/agents/demo-agent/sessions/session1/messages" &&
       method === "POST"
     ) {
       const payload = await request.postDataJSON();
       history.splice(0, history.length, {
         message_id: "message-1",
-        session_id: "session-1",
+        session_id: "session1",
         role: "user",
         message: payload.message,
         context: { run_id: "run-1" },
@@ -170,7 +170,7 @@ async function mockApi(page: Page) {
       await json({
         message_id: "message-1",
         run_id: "run-1",
-        session_id: "session-1",
+        session_id: "session1",
         status: "queued",
         created_at: "2026-05-26T08:01:00+00:00"
       }, 202);
@@ -185,7 +185,7 @@ async function mockApi(page: Page) {
           status: "running",
           user: "admin",
           created_at: "2026-05-26T08:01:00+00:00",
-          session_id: "session-1"
+          session_id: "session1"
         }
       ]);
       return;
@@ -201,7 +201,7 @@ async function mockApi(page: Page) {
           content_type: "application/json",
           size_bytes: 38,
           created_at: "2026-05-26T08:01:03+00:00",
-          metadata: { source: "demo-agent", session_id: "session-1" }
+          metadata: { source: "demo-agent", session_id: "session1" }
         }
       ]);
       return;
@@ -258,7 +258,7 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByText("No sessions yet")).toBeVisible();
 
   await page.getByRole("button", { name: "Start session" }).first().click();
-  await expect(page.getByText("session-1")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Chat Session: session1" })).toBeVisible();
   await page.getByPlaceholder("Message demo-agent...").fill("hello");
   await page.getByRole("button", { name: "Send" }).click();
 

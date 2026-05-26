@@ -69,6 +69,16 @@ async function mockApi(page: Page) {
       return;
     }
 
+    if (path === "/auth/me" && method === "GET") {
+      await json({
+        subject: "admin",
+        role: "admin",
+        credential_type: "jwt",
+        api_key_id: null
+      });
+      return;
+    }
+
     if (path === "/v1/templates" && method === "GET") {
       await json([
         {
@@ -249,6 +259,7 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await page.getByPlaceholder("Password").fill("demo-password");
   await page.getByRole("button", { name: "Sign in" }).click();
 
+  await expect(page.getByText("admin").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Create Workload" })).toBeVisible();
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByText("Created demo-agent")).toBeVisible();

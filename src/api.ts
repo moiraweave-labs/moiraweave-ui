@@ -86,6 +86,13 @@ export type TokenResponse = {
   role: string;
 };
 
+export type AuthProfile = {
+  subject: string;
+  role: string;
+  credential_type: string;
+  api_key_id?: string | null;
+};
+
 export type Deployment = {
   deployment_id: string;
   workload_name: string;
@@ -239,6 +246,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, password })
     }),
+  me: () => request<AuthProfile>("/auth/me"),
   workloads: () => request<WorkloadInfo[]>("/v1/workloads"),
   workload: (name: string) => request<WorkloadInfo>(`/v1/workloads/${name}`),
   templates: () => request<WorkloadTemplate[]>("/v1/templates"),

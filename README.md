@@ -13,6 +13,8 @@ Redis, Postgres, Kubernetes, or agent runtimes.
 
 - Guided workload creation from templates plus next-step actions and advanced
   manifest registration
+- Role-aware controls for `viewer`, `operator`, and `admin` credentials resolved
+  through `/auth/me`
 - Run submission, run list, run detail, events, artifacts, and cancellation
 - Agent sessions and chat with first-session CTAs, run status, latest event, and
   artifact links

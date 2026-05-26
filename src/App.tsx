@@ -22,9 +22,10 @@ import {
   Terminal,
   Layers,
   MessageSquare,
-  AlertTriangle,
   Clipboard,
-  Cpu
+  Cpu,
+  KeyRound,
+  ShieldCheck
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
@@ -77,8 +78,33 @@ const SAMPLE_DEPLOYMENT_METADATA = `{
   "source": "moiraweave-ui"
 }`;
 
+const ROLE_RANK: Record<string, number> = { viewer: 0, operator: 1, admin: 2 };
+
+function roleAllows(role: string | undefined, minimumRole: "viewer" | "operator" | "admin"): boolean {
+  return (ROLE_RANK[role || ""] ?? -1) >= ROLE_RANK[minimumRole];
+}
+
+function useAuthProfile() {
+  const token = getToken();
+  const profile = useQuery({
+    queryKey: ["auth-profile", token],
+    queryFn: api.me,
+    enabled: Boolean(token),
+    retry: false,
+    staleTime: 30_000
+  });
+  return {
+    profile,
+    subject: profile.data?.subject,
+    role: profile.data?.role,
+    canOperate: roleAllows(profile.data?.role, "operator"),
+    canAdmin: roleAllows(profile.data?.role, "admin")
+  };
+}
+
 function Shell() {
   const [token, updateToken] = useState(getToken());
+  const auth = useAuthProfile();
   const nav = [
     { to: "/", label: "Workloads", icon: Box },
     { to: "/runs", label: "Runs", icon: Activity },
@@ -142,6 +168,20 @@ function Shell() {
             </div>
           </div>
           <div className="flex min-w-0 flex-1 items-center justify-end gap-3">
+            {token && (
+              <div className="hidden min-w-0 items-center gap-2 rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-1.5 text-xs text-slate-300 sm:flex">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+                <span className="truncate font-semibold text-slate-200">
+                  {auth.subject || "Checking token"}
+                </span>
+                <span className="rounded border border-emerald-500/20 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                  {auth.role || "..."}
+                </span>
+                {auth.profile.data?.credential_type === "api_key" && (
+                  <KeyRound className="h-3.5 w-3.5 text-sky-400" />
+                )}
+              </div>
+            )}
             <div className="relative flex min-w-0 max-w-xl flex-1 items-center md:flex-none md:w-80">
               <input
                 className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3.5 py-1.5 text-xs text-slate-200 placeholder-slate-500 outline-none transition-all focus:border-slate-700 focus:ring-1 focus:ring-slate-700"
@@ -164,6 +204,15 @@ function Shell() {
         <div className="mx-auto max-w-7xl p-6">
           {!token ? (
             <Login onLogin={onTokenChange} />
+          ) : auth.profile.error ? (
+            <Panel title="Invalid Credential">
+              <div className="space-y-3 p-6 text-sm text-slate-300">
+                <div className="flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-300">
+                  <XCircle className="h-4 w-4 shrink-0" />
+                  <span>The current bearer token could not be resolved. Sign in again or paste a valid API key.</span>
+                </div>
+              </div>
+            </Panel>
           ) : (
             <Routes>
               <Route path="/" element={<Workloads />} />
@@ -244,6 +293,31 @@ function Panel(props: { title: string; action?: ReactNode; children: ReactNode }
   );
 }
 
+function PermissionNotice({
+  minimumRole,
+  action
+}: {
+  minimumRole: "operator" | "admin";
+  action: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200">
+      <ShieldCheck className="h-4 w-4 shrink-0" />
+      <span>
+        {action} requires the <span className="font-bold">{minimumRole}</span> role.
+      </span>
+    </div>
+  );
+}
+
+function ErrorMessage({ error, fallback }: { error: unknown; fallback: string }) {
+  return (
+    <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
+      {formatError(error, fallback)}
+    </div>
+  );
+}
+
 function StateBadge({ state }: { state: string }) {
   const badgeStyle = {
     succeeded: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
@@ -287,6 +361,7 @@ function WorkloadHealthBadge({ name }: { name: string }) {
 
 function Workloads() {
   const queryClient = useQueryClient();
+  const { canAdmin } = useAuthProfile();
   const [draft, setDraft] = useState(SAMPLE_WORKLOAD);
   const [templateId, setTemplateId] = useState("demo-agent");
   const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
@@ -377,8 +452,8 @@ function Workloads() {
           title="Create Workload"
           action={
             <button
-              className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all"
-              disabled={!templateId || createFromTemplate.isPending}
+              className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+              disabled={!canAdmin || !templateId || createFromTemplate.isPending}
               onClick={() => createFromTemplate.mutate()}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -387,6 +462,9 @@ function Workloads() {
           }
         >
           <div className="space-y-4 p-5">
+            {!canAdmin && (
+              <PermissionNotice minimumRole="admin" action="Creating workloads" />
+            )}
             <div>
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Template</label>
               <select
@@ -444,9 +522,7 @@ function Workloads() {
               ))}
             </div>
             {createFromTemplate.error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
-                Workload creation failed.
-              </div>
+              <ErrorMessage error={createFromTemplate.error} fallback="Workload creation failed." />
             )}
             {createdWorkload && (
               <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-200">
@@ -480,14 +556,20 @@ function Workloads() {
           title="Advanced Manifest"
           action={
             <button
-              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700"
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => register.mutate()}
+              disabled={!canAdmin}
             >
               <Plus className="h-3.5 w-3.5" />
               Register
             </button>
           }
         >
+          {!canAdmin && (
+            <div className="p-4">
+              <PermissionNotice minimumRole="admin" action="Registering manifests" />
+            </div>
+          )}
           <div className="relative">
             <div className="absolute top-2 right-2 z-10 flex gap-2">
               <button
@@ -513,11 +595,8 @@ function Workloads() {
             />
           </div>
           {register.error && (
-            <div className="border-t border-slate-800 p-4 bg-red-500/5 text-xs text-red-400">
-              <div className="flex gap-2 items-center">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span className="font-semibold">Invalid manifest JSON</span>
-              </div>
+            <div className="border-t border-slate-800 p-4 bg-red-500/5">
+              <ErrorMessage error={register.error} fallback="Manifest registration failed." />
             </div>
           )}
         </Panel>
@@ -545,6 +624,7 @@ function TemplateSummary({ template }: { template: WorkloadTemplate }) {
 }
 
 function Runs() {
+  const { canOperate } = useAuthProfile();
   const [workload, setWorkload] = useState("");
   const [submitWorkload, setSubmitWorkload] = useState("");
   const [payloadDraft, setPayloadDraft] = useState(SAMPLE_RUN_PAYLOAD);
@@ -586,7 +666,7 @@ function Runs() {
         action={
           <button
             className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
-            disabled={!submitWorkload || submitRun.isPending}
+            disabled={!canOperate || !submitWorkload || submitRun.isPending}
             onClick={() => submitRun.mutate()}
           >
             <Play className="h-3.5 w-3.5" />
@@ -596,6 +676,9 @@ function Runs() {
       >
         <div className="grid gap-4 p-5 lg:grid-cols-[280px_1fr]">
           <div className="space-y-4">
+            {!canOperate && (
+              <PermissionNotice minimumRole="operator" action="Submitting runs" />
+            )}
             <div>
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Workload</label>
               <select
@@ -625,9 +708,7 @@ function Runs() {
               )}
             </div>
             {submitRun.error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
-                Submit failed. Check JSON and workload state.
-              </div>
+              <ErrorMessage error={submitRun.error} fallback="Submit failed. Check JSON and workload state." />
             )}
           </div>
           <textarea
@@ -754,6 +835,7 @@ function RunsTable({ runs }: { runs: RunStatus[] }) {
 function RunDetail() {
   const { runId = "" } = useParams();
   const queryClient = useQueryClient();
+  const { canOperate } = useAuthProfile();
   const [streamedEvents, setStreamedEvents] = useState<RunEvent[]>([]);
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
   
@@ -828,7 +910,7 @@ function RunDetail() {
             <button
               className="inline-flex items-center gap-2 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-400 hover:bg-red-500/20 transition-all disabled:opacity-50 disabled:pointer-events-none"
               onClick={() => cancel.mutate()}
-              disabled={!current || ["succeeded", "failed", "canceled", "lost"].includes(current.status)}
+              disabled={!canOperate || !current || ["succeeded", "failed", "canceled", "lost"].includes(current.status)}
             >
               <CircleStop className="h-3.5 w-3.5" />
               Cancel Execution
@@ -913,6 +995,7 @@ function RunDetail() {
 }
 
 function AgentConsole() {
+  const { canOperate } = useAuthProfile();
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
   const agents = useMemo(
     () => (workloads.data || []).filter((item) => item.type === "agent-service"),
@@ -998,7 +1081,7 @@ function AgentConsole() {
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (selected && message.trim()) send.mutate();
+    if (canOperate && selected && message.trim()) send.mutate();
   }
 
   return (
@@ -1010,7 +1093,7 @@ function AgentConsole() {
           <button
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-colors disabled:opacity-50"
             onClick={() => create.mutate()}
-            disabled={!agent}
+            disabled={!canOperate || !agent}
           >
             <Play className="h-3 w-3" />
             New Session
@@ -1018,6 +1101,9 @@ function AgentConsole() {
         }
       >
         <div className="space-y-4 p-4">
+          {!canOperate && (
+            <PermissionNotice minimumRole="operator" action="Creating sessions and messaging agents" />
+          )}
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Select Agent</label>
             <select
@@ -1063,7 +1149,7 @@ function AgentConsole() {
                 <button
                   className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
                   onClick={() => create.mutate()}
-                  disabled={create.isPending}
+                  disabled={!canOperate || create.isPending}
                 >
                   <Play className="h-3 w-3" />
                   Start session
@@ -1103,8 +1189,8 @@ function AgentConsole() {
               <MessageBubble
                 key={item.message_id}
                 message={item}
-                onCancel={(runId) => cancelRun.mutate(runId)}
-                onRetry={(text) => retry.mutate(text)}
+                onCancel={canOperate ? (runId) => cancelRun.mutate(runId) : undefined}
+                onRetry={canOperate ? (text) => retry.mutate(text) : undefined}
               />
             ))}
             {!selected && (
@@ -1121,7 +1207,7 @@ function AgentConsole() {
                     <button
                       className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-600 disabled:opacity-50"
                       onClick={() => create.mutate()}
-                      disabled={create.isPending}
+                      disabled={!canOperate || create.isPending}
                     >
                       <Play className="h-3.5 w-3.5" />
                       Start session
@@ -1152,11 +1238,11 @@ function AgentConsole() {
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               placeholder={selected ? `Message ${agent}...` : "Select a session"}
-              disabled={!selected}
+              disabled={!canOperate || !selected}
             />
             <button
               className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 px-4 py-2 text-xs font-semibold text-white disabled:bg-slate-800 disabled:text-slate-600 transition-all shadow-lg shadow-emerald-500/5 shrink-0"
-              disabled={!selected || !message.trim()}
+              disabled={!canOperate || !selected || !message.trim()}
             >
               <Send className="h-3.5 w-3.5" />
               <span>Send</span>
@@ -1457,6 +1543,7 @@ function formatBytes(value?: number | null): string {
 
 function Health() {
   const queryClient = useQueryClient();
+  const { canOperate, canAdmin } = useAuthProfile();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedWorkload = searchParams.get("workload") || "";
   const [workload, setWorkload] = useState(() => requestedWorkload);
@@ -1487,6 +1574,7 @@ function Health() {
   const secretInventory = useQuery({
     queryKey: ["secrets", workload || "all"],
     queryFn: () => api.secrets(workload || undefined),
+    enabled: canAdmin,
     refetchInterval: 10000
   });
   const operationEvents = useQuery({
@@ -1566,7 +1654,7 @@ function Health() {
           <div className="flex items-center gap-2">
             <button
               className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-slate-700 disabled:text-slate-600"
-              disabled={!workload || preflightMutation.isPending}
+              disabled={!canOperate || !workload || preflightMutation.isPending}
               onClick={() => preflightMutation.mutate()}
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1582,7 +1670,7 @@ function Health() {
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition-all hover:bg-emerald-500/20 disabled:text-slate-600"
-              disabled={!workload || syncOperation.isPending}
+              disabled={!canOperate || !workload || syncOperation.isPending}
               onClick={() => syncOperation.mutate()}
             >
               <RefreshCcw className="h-3.5 w-3.5" />
@@ -1590,7 +1678,7 @@ function Health() {
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
-              disabled={!workload || recordDeployment.isPending}
+              disabled={!canOperate || !workload || recordDeployment.isPending}
               onClick={() => recordDeployment.mutate()}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -1601,6 +1689,11 @@ function Health() {
       >
         <div className="grid gap-4 p-5 lg:grid-cols-[1fr_1fr]">
           <div className="grid gap-3 sm:grid-cols-2">
+            {!canOperate && (
+              <div className="sm:col-span-2">
+                <PermissionNotice minimumRole="operator" action="Preflight, sync, and deployment records" />
+              </div>
+            )}
             <div>
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Workload</label>
               <select
@@ -1663,13 +1756,23 @@ function Health() {
               />
             </div>
             {recordDeployment.error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400 sm:col-span-2">
-                Deployment record failed. Check JSON and endpoint.
+              <div className="sm:col-span-2">
+                <ErrorMessage error={recordDeployment.error} fallback="Deployment record failed. Check JSON and endpoint." />
               </div>
             )}
             {deploymentPlan.error && (
-              <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400 sm:col-span-2">
-                Deployment plan failed. Check target and workload deployment mode.
+              <div className="sm:col-span-2">
+                <ErrorMessage error={deploymentPlan.error} fallback="Deployment plan failed. Check target and workload deployment mode." />
+              </div>
+            )}
+            {preflightMutation.error && (
+              <div className="sm:col-span-2">
+                <ErrorMessage error={preflightMutation.error} fallback="Preflight failed. Check workload and role." />
+              </div>
+            )}
+            {syncOperation.error && (
+              <div className="sm:col-span-2">
+                <ErrorMessage error={syncOperation.error} fallback="Deployment sync failed. Check workload and role." />
               </div>
             )}
             {selectedWorkloadHealth.data && (
@@ -1695,8 +1798,11 @@ function Health() {
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Secret Inventory</span>
                 {secretInventory.data && <StateBadge state={secretInventory.data.status} />}
               </div>
+              {!canAdmin && (
+                <PermissionNotice minimumRole="admin" action="Viewing secret inventory" />
+              )}
               {secretInventory.isLoading && <div className="text-slate-500">Loading required names...</div>}
-              {secretInventory.error && <div className="text-red-400">Unable to load secret inventory.</div>}
+              {secretInventory.error && <div className="text-red-400">{formatError(secretInventory.error, "Unable to load secret inventory.")}</div>}
               {secretInventory.data && secretInventory.data.secrets.length === 0 && (
                 <div className="text-slate-500">No required secrets declared.</div>
               )}
@@ -2058,6 +2164,17 @@ function formatDate(value?: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function formatError(error: unknown, fallback: string): string {
+  if (!(error instanceof Error) || !error.message) return fallback;
+  try {
+    const parsed = JSON.parse(error.message) as { detail?: unknown };
+    if (typeof parsed.detail === "string") return parsed.detail;
+  } catch {
+    // Fall through to the raw message when the API returned plain text.
+  }
+  return error.message || fallback;
 }
 
 function mergeEvents(stored: RunEvent[], streamed: RunEvent[]): RunEvent[] {

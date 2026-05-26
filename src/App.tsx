@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   CircleStop,
   Database,
+  Download,
+  FileText,
   LogIn,
   LogOut,
   Play,
@@ -1307,6 +1309,26 @@ function ArtifactDetails({ artifact }: { artifact: Artifact }) {
   const metadata = artifact.metadata || {};
   const metadataText = JSON.stringify(metadata, null, 2);
   const hasMetadata = Object.keys(metadata).length > 0;
+  const canServeContent = isServedArtifactUri(artifact.uri);
+  const preview = useQuery({
+    queryKey: ["artifact-preview", artifact.run_id, artifact.id],
+    queryFn: () => api.artifactPreview(artifact.run_id, artifact.id),
+    enabled: canServeContent,
+    retry: false
+  });
+  const download = useMutation({
+    mutationFn: () => api.downloadArtifact(artifact.run_id, artifact.id),
+    onSuccess: (blob) => {
+      const href = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = artifact.name;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(href);
+    }
+  });
   return (
     <Panel
       title="Artifact Details"
@@ -1325,6 +1347,14 @@ function ArtifactDetails({ artifact }: { artifact: Artifact }) {
           >
             <Clipboard className="h-3 w-3" />
             Metadata
+          </button>
+          <button
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800 px-2.5 py-1.5 text-[10px] font-semibold text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+            onClick={() => download.mutate()}
+            disabled={!canServeContent || download.isPending}
+          >
+            <Download className="h-3 w-3" />
+            File
           </button>
         </div>
       }
@@ -1361,9 +1391,56 @@ function ArtifactDetails({ artifact }: { artifact: Artifact }) {
             </div>
           )}
         </div>
+        <div>
+          <span className="mb-2 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            <FileText className="h-3 w-3" />
+            Content Preview
+          </span>
+          {!canServeContent ? (
+            <div className="rounded-lg border border-slate-800 bg-[#050811] p-4 text-center text-xs text-slate-500">
+              This artifact URI is not served by the API. Use the runtime or
+              external storage owner to inspect it.
+            </div>
+          ) : preview.isLoading ? (
+            <div className="rounded-lg border border-slate-800 bg-[#050811] p-4 text-center text-xs text-slate-500">
+              Loading preview...
+            </div>
+          ) : preview.data ? (
+            <div className="space-y-2">
+              <pre className="max-h-72 overflow-auto rounded-lg border border-slate-900 bg-[#050811] p-4 font-mono text-[10px] leading-normal text-sky-300/90">
+                {preview.data.text}
+              </pre>
+              {preview.data.truncated && (
+                <div className="text-[10px] text-amber-300">
+                  Preview truncated. Full file size:{" "}
+                  {formatBytes(preview.data.size_bytes)}.
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-800 bg-[#050811] p-4 text-center text-xs text-slate-500">
+              Preview unavailable for this file. The content may be binary,
+              missing, or outside the configured artifact storage.
+            </div>
+          )}
+        </div>
       </div>
     </Panel>
   );
+}
+
+function isServedArtifactUri(uri: string): boolean {
+  const normalized = uri.trim().toLowerCase();
+  if (!normalized) return false;
+  if (
+    normalized.startsWith("file://") ||
+    normalized.startsWith("local://") ||
+    normalized.startsWith("artifact://") ||
+    normalized.startsWith("artifacts://")
+  ) {
+    return true;
+  }
+  return !/^[a-z][a-z0-9+.-]*:/.test(normalized);
 }
 
 function formatBytes(value?: number | null): string {

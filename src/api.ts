@@ -48,6 +48,16 @@ export type Artifact = {
   metadata: Record<string, unknown>;
 };
 
+export type ArtifactPreview = {
+  artifact_id: string;
+  run_id: string;
+  name: string;
+  content_type?: string | null;
+  text: string;
+  truncated: boolean;
+  size_bytes: number;
+};
+
 export type AgentSession = {
   session_id: string;
   agent_name: string;
@@ -208,6 +218,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function requestBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+  const headers = new Headers(options.headers);
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || response.statusText);
+  }
+  return response.blob();
+}
+
 export const api = {
   login: (username: string, password: string) =>
     request<TokenResponse>("/auth/token", {
@@ -290,6 +313,18 @@ export const api = {
   cancelRun: (id: string) => request<RunStatus>(`/v1/runs/${id}/cancel`, { method: "POST" }),
   events: (id: string) => request<RunEvent[]>(`/v1/runs/${id}/events`),
   artifacts: (id: string) => request<Artifact[]>(`/v1/runs/${id}/artifacts`),
+  artifactPreview: (runId: string, artifactId: string, maxBytes = 65536) =>
+    request<ArtifactPreview>(
+      `/v1/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(
+        artifactId
+      )}/preview?max_bytes=${maxBytes}`
+    ),
+  downloadArtifact: (runId: string, artifactId: string) =>
+    requestBlob(
+      `/v1/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(
+        artifactId
+      )}/download`
+    ),
   artifactLibrary: (filters: {
     workload_name?: string;
     session_id?: string;

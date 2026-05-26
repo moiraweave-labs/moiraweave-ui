@@ -19,7 +19,8 @@ Redis, Postgres, Kubernetes, or agent runtimes.
 - Channel ownership view for UI/API and runtime-owned integrations
 - Operations Center with preflight checks, deployment plans, sync, and health
 - Artifact Library filters by workload, session, run, and content type, with
-  metadata preview, run links, and copy actions
+  metadata preview, local/PVC content preview, downloads, run links, and copy
+  actions
 
 The CLI is still the entry point for workspace initialization, local file
 generation, Docker Compose, Helm apply, and platform logs. The UI can request

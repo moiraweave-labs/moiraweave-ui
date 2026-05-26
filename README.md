@@ -40,6 +40,16 @@ Set `VITE_API_BASE_URL` when the API Gateway is not served from the same origin:
 VITE_API_BASE_URL=http://localhost:8000 npm run dev
 ```
 
+## Tests
+
+```bash
+npm run test:e2e
+```
+
+The Playwright suite mocks the API at the browser boundary and verifies the
+primary product loop: sign in, create a demo agent, start a session, send a
+message, follow run status, and inspect artifact metadata/content.
+
 ## Build
 
 ```bash

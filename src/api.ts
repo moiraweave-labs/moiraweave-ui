@@ -82,6 +82,8 @@ export type AgentMessage = {
 export type TokenResponse = {
   access_token: string;
   token_type: string;
+  subject: string;
+  role: string;
 };
 
 export type Deployment = {

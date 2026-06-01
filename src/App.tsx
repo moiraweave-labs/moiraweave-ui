@@ -26,7 +26,8 @@ import { Panel } from "./components/common";
 import { AgentConsole } from "./screens/Agents";
 import { Artifacts } from "./screens/Artifacts";
 import { Health } from "./screens/Health";
-import { RunDetail, Runs } from "./screens/Runs";
+import { RunDetail } from "./screens/RunDetail";
+import { Runs } from "./screens/Runs";
 import { Workloads } from "./screens/Workloads";
 
 function Shell() {

@@ -7,7 +7,6 @@ import {
   Box,
   CheckCircle2,
   CircleStop,
-  Database,
   Download,
   FileText,
   LogIn,
@@ -28,7 +27,7 @@ import {
   ShieldCheck
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
+import type { FormEvent } from "react";
 import { Link, NavLink, Route, Routes, useParams, useSearchParams } from "react-router-dom";
 import {
   WorkloadTemplate,
@@ -40,7 +39,6 @@ import {
 } from "./api";
 import type {
   Artifact,
-  AgentMessage,
   AgentSession,
   DeploymentOperation,
   DeploymentPlan,
@@ -49,58 +47,33 @@ import type {
   RunResponse,
   RunStatus
 } from "./api";
-
-const SAMPLE_WORKLOAD = `{
-  "apiVersion": "moiraweave.io/v1alpha1",
-  "kind": "Workload",
-  "metadata": { "name": "hermes" },
-  "spec": {
-    "type": "agent-service",
-    "image": "ghcr.io/nousresearch/hermes-agent:latest",
-    "execution": { "mode": "session", "timeoutSeconds": 172800 },
-    "ports": [{ "name": "http", "port": 8000 }],
-    "persistence": { "enabled": true, "mountPath": "/data" },
-    "secrets": ["OPENAI_API_KEY"],
-    "agent": {
-      "adapter": "hermes",
-      "requiredSecrets": ["OPENAI_API_KEY"],
-      "workspaceMount": "/workspace",
-      "exposedChannels": ["ui", "api"]
-    }
-  }
-}`;
-
-const SAMPLE_RUN_PAYLOAD = `{
-  "prompt": "Summarize the current workspace status"
-}`;
-
-const SAMPLE_DEPLOYMENT_METADATA = `{
-  "source": "moiraweave-ui"
-}`;
-
-const ROLE_RANK: Record<string, number> = { viewer: 0, operator: 1, admin: 2 };
-
-function roleAllows(role: string | undefined, minimumRole: "viewer" | "operator" | "admin"): boolean {
-  return (ROLE_RANK[role || ""] ?? -1) >= ROLE_RANK[minimumRole];
-}
-
-function useAuthProfile() {
-  const token = getToken();
-  const profile = useQuery({
-    queryKey: ["auth-profile", token],
-    queryFn: api.me,
-    enabled: Boolean(token),
-    retry: false,
-    staleTime: 30_000
-  });
-  return {
-    profile,
-    subject: profile.data?.subject,
-    role: profile.data?.role,
-    canOperate: roleAllows(profile.data?.role, "operator"),
-    canAdmin: roleAllows(profile.data?.role, "admin")
-  };
-}
+import { useAuthProfile } from "./auth";
+import {
+  SAMPLE_DEPLOYMENT_METADATA,
+  SAMPLE_RUN_PAYLOAD,
+  SAMPLE_WORKLOAD
+} from "./constants";
+import {
+  ChannelPills,
+  ErrorMessage,
+  HealthTile,
+  Metric,
+  Panel,
+  PermissionNotice,
+  RowMessage,
+  StateBadge,
+  WorkloadHealthBadge
+} from "./components/common";
+import { MessageBubble } from "./components/MessageBubble";
+import {
+  agentAdapter,
+  agentChannels,
+  formatBytes,
+  formatDate,
+  formatError,
+  isServedArtifactUri,
+  mergeEvents
+} from "./utils";
 
 function Shell() {
   const [token, updateToken] = useState(getToken());
@@ -279,84 +252,6 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
       </Panel>
     </div>
   );
-}
-
-function Panel(props: { title: string; action?: ReactNode; children: ReactNode }) {
-  return (
-    <section className="rounded-xl border border-slate-800/80 bg-[#0e1322]/50 backdrop-blur-md overflow-hidden shadow-card hover:border-slate-800 transition-all duration-300">
-      <div className="flex min-h-12 items-center justify-between border-b border-slate-800/70 bg-[#0b0f19]/60 px-5 py-2.5">
-        <h2 className="text-sm font-semibold tracking-wide text-slate-200">{props.title}</h2>
-        {props.action}
-      </div>
-      <div>{props.children}</div>
-    </section>
-  );
-}
-
-function PermissionNotice({
-  minimumRole,
-  action
-}: {
-  minimumRole: "operator" | "admin";
-  action: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200">
-      <ShieldCheck className="h-4 w-4 shrink-0" />
-      <span>
-        {action} requires the <span className="font-bold">{minimumRole}</span> role.
-      </span>
-    </div>
-  );
-}
-
-function ErrorMessage({ error, fallback }: { error: unknown; fallback: string }) {
-  return (
-    <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
-      {formatError(error, fallback)}
-    </div>
-  );
-}
-
-function StateBadge({ state }: { state: string }) {
-  const badgeStyle = {
-    succeeded: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    running: "bg-sky-500/10 text-sky-400 border-sky-500/20",
-    starting: "bg-sky-500/10 text-sky-400 border-sky-500/20",
-    queued: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    healthy: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    passed: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    pending: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    warning: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    present: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-    missing: "bg-red-500/10 text-red-400 border-red-500/20",
-    failed: "bg-red-500/10 text-red-400 border-red-500/20",
-    degraded: "bg-red-500/10 text-red-400 border-red-500/20",
-    canceled: "bg-slate-500/10 text-slate-400 border-slate-500/20",
-    cancelling: "bg-slate-500/10 text-slate-400 border-slate-500/20",
-    cancel_requested: "bg-slate-500/10 text-slate-400 border-slate-500/20",
-    lost: "bg-red-500/10 text-red-400 border-red-500/20"
-  }[state] || "bg-slate-500/10 text-slate-400 border-slate-500/20";
-
-  const isPulse = ["running", "starting"].includes(state);
-
-  return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold border ${badgeStyle}`}>
-      {isPulse && <span className="status-dot status-dot-pulse bg-sky-400" />}
-      {state}
-    </span>
-  );
-}
-
-function WorkloadHealthBadge({ name }: { name: string }) {
-  const health = useQuery({
-    queryKey: ["workload-health", name],
-    queryFn: () => api.workloadHealth(name),
-    refetchInterval: 10000
-  });
-  if (health.isLoading) return <StateBadge state="checking" />;
-  if (health.error || !health.data) return <StateBadge state="unknown" />;
-  return <StateBadge state={health.data.status} />;
 }
 
 function Workloads() {
@@ -1515,32 +1410,6 @@ function ArtifactDetails({ artifact }: { artifact: Artifact }) {
   );
 }
 
-function isServedArtifactUri(uri: string): boolean {
-  const normalized = uri.trim().toLowerCase();
-  if (!normalized) return false;
-  if (
-    normalized.startsWith("file://") ||
-    normalized.startsWith("local://") ||
-    normalized.startsWith("artifact://") ||
-    normalized.startsWith("artifacts://")
-  ) {
-    return true;
-  }
-  return !/^[a-z][a-z0-9+.-]*:/.test(normalized);
-}
-
-function formatBytes(value?: number | null): string {
-  if (value === null || value === undefined) return "-";
-  if (value < 1024) return `${value} B`;
-  const units = ["KB", "MB", "GB", "TB"];
-  let amount = value / 1024;
-  for (const unit of units) {
-    if (amount < 1024) return `${amount.toFixed(amount >= 10 ? 0 : 1)} ${unit}`;
-    amount /= 1024;
-  }
-  return `${amount.toFixed(0)} PB`;
-}
-
 function Health() {
   const queryClient = useQueryClient();
   const { canOperate, canAdmin } = useAuthProfile();
@@ -1963,259 +1832,6 @@ function Health() {
       </Panel>
     </div>
   );
-}
-
-function HealthTile({ title, ok, body }: { title: string; ok: boolean; body?: unknown }) {
-  const Icon = ok ? CheckCircle2 : XCircle;
-  const statusLabel = ok ? "Healthy & Online" : "Degraded / Offline";
-  
-  // Try to extract uptime/version from body if exists
-  const details = body as Record<string, unknown> | undefined;
-  
-  return (
-    <Panel title={title}>
-      <div className="p-6">
-        <div className="flex items-center gap-3.5 mb-5 p-4 rounded-xl border border-slate-800 bg-[#0b0f19]/30">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${ok ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
-            <Icon className="h-6 w-6" />
-          </div>
-          <div>
-            <span className="block text-xs font-bold uppercase tracking-wider text-slate-400">Status</span>
-            <span className={`text-sm font-bold ${ok ? "text-emerald-400" : "text-red-400"}`}>{statusLabel}</span>
-          </div>
-        </div>
-        
-        {details && (
-          <div className="grid gap-3 grid-cols-2 mb-5">
-            <div className="bg-slate-900/10 border border-slate-800/80 rounded-lg p-3 text-center">
-              <span className="block text-[10px] font-semibold uppercase text-slate-500">Service</span>
-              <span className="text-xs font-bold text-slate-300 mt-0.5 block">{String(details.status || "moiraweave-api")}</span>
-            </div>
-            <div className="bg-slate-900/10 border border-slate-800/80 rounded-lg p-3 text-center">
-              <span className="block text-[10px] font-semibold uppercase text-slate-500">Version</span>
-              <span className="text-xs font-bold text-slate-300 mt-0.5 block">{String(details.version || "0.1.0")}</span>
-            </div>
-          </div>
-        )}
-        
-        <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Diagnostic Data</span>
-        <div className="p-4 bg-[#050811] rounded-lg border border-slate-900">
-          <pre className="overflow-auto text-[10px] font-mono text-emerald-500/85 leading-normal max-h-40">
-            {JSON.stringify(body || { error: "No response from service" }, null, 2)}
-          </pre>
-        </div>
-      </div>
-    </Panel>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div className="p-1.5 rounded-lg border border-slate-800/30 bg-slate-900/10">
-      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</div>
-      <div className="mt-1 text-sm font-semibold text-slate-200">{value}</div>
-    </div>
-  );
-}
-
-function MessageBubble({
-  message,
-  onCancel,
-  onRetry
-}: {
-  message: AgentMessage;
-  onCancel?: (runId: string) => void;
-  onRetry?: (text: string) => void;
-}) {
-  const isUser = message.role === "user";
-  const canCancel =
-    Boolean(message.run_id) &&
-    ["queued", "starting", "running", "cancel_requested", "cancelling"].includes(
-      message.run_status || ""
-    );
-  return (
-    <div className={`flex gap-3.5 ${isUser ? "justify-end" : "justify-start"}`}>
-      {!isUser && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-800 bg-[#0e1322] text-emerald-400">
-          <Bot className="h-4 w-4" />
-        </div>
-      )}
-      <div
-        className={`max-w-[78%] rounded-xl px-4 py-3 text-xs shadow-sm ${
-          isUser
-            ? "bg-gradient-to-tr from-emerald-500 to-teal-500 text-white font-medium rounded-tr-none"
-            : "border border-slate-800/80 bg-[#0e1322]/80 text-slate-300 rounded-tl-none"
-        }`}
-      >
-        <div className="mb-1 text-[9px] font-bold uppercase tracking-wider opacity-60">
-          {isUser ? "You" : message.role}
-        </div>
-        <div className="whitespace-pre-wrap leading-relaxed">{message.message}</div>
-        {message.run_id && (
-          <div className={`mt-3 rounded-lg border px-2.5 py-2 ${isUser ? "border-white/20 bg-white/10" : "border-slate-800 bg-[#090d16]/70"}`}>
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                className={`font-mono text-[10px] font-semibold underline-offset-2 hover:underline ${isUser ? "text-white" : "text-sky-300"}`}
-                to={`/runs/${message.run_id}`}
-              >
-                {message.run_id.slice(0, 8)}
-              </Link>
-              {message.run_status && <StateBadge state={message.run_status} />}
-              {message.artifact_count ? (
-                <span className="text-[10px] font-semibold text-slate-300">
-                  {message.artifact_count} artifact{message.artifact_count === 1 ? "" : "s"}
-                </span>
-              ) : null}
-            </div>
-            {message.latest_event && (
-              <div className={`mt-1 text-[10px] ${isUser ? "text-white/75" : "text-slate-500"}`}>
-                {message.latest_event.type}: {message.latest_event.message}
-              </div>
-            )}
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <Link
-                className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold ${
-                  isUser
-                    ? "border-white/20 bg-white/10 text-white hover:bg-white/15"
-                    : "border-slate-800 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60"
-                }`}
-                to={`/artifacts?run_id=${encodeURIComponent(message.run_id)}`}
-              >
-                <Archive className="h-3 w-3" />
-                Artifacts
-              </Link>
-              {canCancel && onCancel && (
-                <button
-                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold ${
-                    isUser
-                      ? "border-white/20 bg-white/10 text-white hover:bg-white/15"
-                      : "border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/15"
-                  }`}
-                  onClick={() => onCancel(message.run_id!)}
-                >
-                  <CircleStop className="h-3 w-3" />
-                  Cancel
-                </button>
-              )}
-              {isUser && onRetry && (
-                <button
-                  className="inline-flex items-center gap-1 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-semibold text-white hover:bg-white/15"
-                  onClick={() => onRetry(message.message)}
-                >
-                  <RefreshCcw className="h-3 w-3" />
-                  Retry
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
-      {isUser && (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
-          <Cpu className="h-4 w-4" />
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ChannelPills({
-  channels,
-  empty,
-  tone
-}: {
-  channels: string[];
-  empty: string;
-  tone: "emerald" | "amber";
-}) {
-  const classes =
-    tone === "amber"
-      ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
-      : "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
-  if (!channels.length) {
-    return <div className="mt-2 text-xs text-slate-600">{empty}</div>;
-  }
-  return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {channels.map((channel) => (
-        <span
-          key={channel}
-          className={`rounded-md border px-2 py-1 text-[10px] font-semibold ${classes}`}
-        >
-          {channel}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-function RowMessage({ colSpan, text }: { colSpan: number; text: string }) {
-  return (
-    <tr>
-      <td className="px-5 py-8 text-center text-xs text-slate-500" colSpan={colSpan}>
-        {text}
-      </td>
-    </tr>
-  );
-}
-
-function formatDate(value?: string | null): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
-
-function formatError(error: unknown, fallback: string): string {
-  if (!(error instanceof Error) || !error.message) return fallback;
-  try {
-    const parsed = JSON.parse(error.message) as { detail?: unknown };
-    if (typeof parsed.detail === "string") return parsed.detail;
-  } catch {
-    // Fall through to the raw message when the API returned plain text.
-  }
-  return error.message || fallback;
-}
-
-function mergeEvents(stored: RunEvent[], streamed: RunEvent[]): RunEvent[] {
-  const events = new Map<string, RunEvent>();
-  for (const event of [...stored, ...streamed]) events.set(event.id, event);
-  return [...events.values()].sort((a, b) => Number(a.id) - Number(b.id));
-}
-
-function agentAdapter(manifest: Record<string, unknown>): string | null {
-  const spec = manifest.spec;
-  if (!spec || typeof spec !== "object") return null;
-  const agent = (spec as Record<string, unknown>).agent;
-  if (!agent || typeof agent !== "object") return null;
-  const adapter = (agent as Record<string, unknown>).adapter;
-  return typeof adapter === "string" ? adapter : null;
-}
-
-function agentChannels(manifest?: Record<string, unknown>): {
-  exposed: string[];
-  externalOwned: string[];
-} {
-  const spec = manifest?.spec;
-  if (!spec || typeof spec !== "object") {
-    return { exposed: [], externalOwned: [] };
-  }
-  const agent = (spec as Record<string, unknown>).agent;
-  if (!agent || typeof agent !== "object") {
-    return { exposed: [], externalOwned: [] };
-  }
-  const data = agent as Record<string, unknown>;
-  return {
-    exposed: stringList(data.exposedChannels),
-    externalOwned: stringList(data.externalOwnedChannels)
-  };
-}
-
-function stringList(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((item) => String(item).trim())
-    .filter((item) => item.length > 0);
 }
 
 export default function App() {

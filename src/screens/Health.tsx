@@ -6,15 +6,17 @@ import { api } from "../api";
 import type { DeploymentOperation, DeploymentPlan, PreflightResponse } from "../api";
 import { useAuthProfile } from "../auth";
 import { SAMPLE_DEPLOYMENT_METADATA } from "../constants";
+import { HealthTile, Panel, PermissionNotice } from "../components/common";
 import {
-  ErrorMessage,
-  HealthTile,
-  Metric,
-  Panel,
-  PermissionNotice,
-  StateBadge
-} from "../components/common";
-import { formatDate, formatError } from "../utils";
+  DeploymentOperationSummary,
+  DeploymentOperationsPanel,
+  DeploymentPlanSummary,
+  DeploymentsPanel,
+  OperationError,
+  PreflightSummary,
+  SecretInventorySummary,
+  WorkloadHealthSummary
+} from "../components/operations";
 
 export function Health() {
   const queryClient = useQueryClient();
@@ -231,159 +233,26 @@ export function Health() {
                 placeholder="http://service:port"
               />
             </div>
-            {recordDeployment.error && (
-              <div className="sm:col-span-2">
-                <ErrorMessage error={recordDeployment.error} fallback="Deployment record failed. Check JSON and endpoint." />
-              </div>
-            )}
-            {deploymentPlan.error && (
-              <div className="sm:col-span-2">
-                <ErrorMessage error={deploymentPlan.error} fallback="Deployment plan failed. Check target and workload deployment mode." />
-              </div>
-            )}
-            {preflightMutation.error && (
-              <div className="sm:col-span-2">
-                <ErrorMessage error={preflightMutation.error} fallback="Preflight failed. Check workload and role." />
-              </div>
-            )}
-            {syncOperation.error && (
-              <div className="sm:col-span-2">
-                <ErrorMessage error={syncOperation.error} fallback="Deployment sync failed. Check workload and role." />
-              </div>
-            )}
+            <OperationError error={recordDeployment.error} fallback="Deployment record failed. Check JSON and endpoint." />
+            <OperationError error={deploymentPlan.error} fallback="Deployment plan failed. Check target and workload deployment mode." />
+            <OperationError error={preflightMutation.error} fallback="Preflight failed. Check workload and role." />
+            <OperationError error={syncOperation.error} fallback="Deployment sync failed. Check workload and role." />
             {selectedWorkloadHealth.data && (
-              <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Workload Health</span>
-                  <StateBadge state={selectedWorkloadHealth.data.status} />
-                </div>
-                <div className="text-slate-400">{selectedWorkloadHealth.data.reason}</div>
-                {selectedWorkloadHealth.data.recommendations.length > 0 && (
-                  <div className="space-y-1">
-                    {selectedWorkloadHealth.data.recommendations.map((item) => (
-                      <div key={item} className="rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200">
-                        {item}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <WorkloadHealthSummary health={selectedWorkloadHealth.data} />
             )}
-            <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Secret Inventory</span>
-                {secretInventory.data && <StateBadge state={secretInventory.data.status} />}
-              </div>
-              {!canAdmin && (
-                <PermissionNotice minimumRole="admin" action="Viewing secret inventory" />
-              )}
-              {secretInventory.isLoading && <div className="text-slate-500">Loading required names...</div>}
-              {secretInventory.error && <div className="text-red-400">{formatError(secretInventory.error, "Unable to load secret inventory.")}</div>}
-              {secretInventory.data && secretInventory.data.secrets.length === 0 && (
-                <div className="text-slate-500">No required secrets declared.</div>
-              )}
-              {secretInventory.data && secretInventory.data.secrets.length > 0 && (
-                <div className="space-y-1.5">
-                  {secretInventory.data.secrets.map((secret) => (
-                    <div key={secret.name} className="flex items-start justify-between gap-3 rounded border border-slate-800 bg-[#050811] p-2">
-                      <div className="min-w-0">
-                        <div className="break-all font-mono text-[11px] text-slate-200">{secret.name}</div>
-                        <div className="mt-1 text-[10px] text-slate-500">
-                          {secret.workloads.join(", ")} - {secret.source}
-                        </div>
-                        {!secret.present && secret.remediation && (
-                          <div className="mt-1 text-[10px] text-amber-300">{secret.remediation}</div>
-                        )}
-                      </div>
-                      <StateBadge state={secret.present ? "present" : "missing"} />
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            {preflight && (
-              <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Preflight</span>
-                  <StateBadge state={preflight.status} />
-                </div>
-                {preflight.recommendations.length > 0 && (
-                  <div className="space-y-1 rounded border border-amber-500/20 bg-amber-500/10 p-2">
-                    <span className="block text-[10px] font-bold uppercase tracking-wider text-amber-200">Recommended Actions</span>
-                    {preflight.recommendations.map((item) => (
-                      <div key={item} className="mt-1 text-[10px] text-amber-100">{item}</div>
-                    ))}
-                  </div>
-                )}
-                <div className="space-y-2">
-                  {preflight.checks.map((check) => (
-                    <div key={check.name} className="rounded border border-slate-800 bg-[#050811] p-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold text-slate-300">{check.name}</span>
-                        <StateBadge state={check.status} />
-                      </div>
-                      <div className="mt-1 text-slate-400">{check.message}</div>
-                      {check.remediation && (
-                        <div className="mt-1 text-amber-300">{check.remediation}</div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {plan && (
-              <div className="space-y-3 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <Metric label="Target" value={<StateBadge state={plan.target} />} />
-                  <Metric label="Service" value={<span className="font-mono text-slate-300">{plan.service_name || "-"}</span>} />
-                  <Metric label="Endpoint" value={<span className="break-all font-mono text-slate-400">{plan.endpoint || "-"}</span>} />
-                </div>
-                {plan.files.length > 0 && (
-                  <div>
-                    <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Files</span>
-                    <div className="space-y-1">
-                      {plan.files.map((file) => (
-                        <code key={file} className="block rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-emerald-300">
-                          {file}
-                        </code>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-slate-500">Commands</span>
-                  <div className="space-y-1">
-                    {plan.commands.map((command) => (
-                      <code key={command} className="block whitespace-pre-wrap rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-sky-300">
-                        {command}
-                      </code>
-                    ))}
-                  </div>
-                </div>
-                {plan.notes.length > 0 && (
-                  <div className="space-y-1 text-[11px] text-slate-400">
-                    {plan.notes.map((note) => (
-                      <div key={note}>{note}</div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            <SecretInventorySummary
+              canAdmin={canAdmin}
+              inventory={secretInventory.data}
+              isLoading={secretInventory.isLoading}
+              error={secretInventory.error}
+            />
+            {preflight && <PreflightSummary preflight={preflight} />}
+            {plan && <DeploymentPlanSummary plan={plan} />}
             {operation && (
-              <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <Metric label="Operation" value={<span className="font-mono text-slate-300">{operation.operation_id.slice(0, 8)}</span>} />
-                  <Metric label="Action" value={<span className="text-slate-300">{operation.action}</span>} />
-                  <Metric label="Status" value={<StateBadge state={operation.status} />} />
-                </div>
-                {(operationEvents.data || []).map((event) => (
-                  <div key={event.id} className="rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-slate-400">
-                    <span className="font-semibold text-sky-300">{event.type}</span>
-                    <span className="mx-2 text-slate-700">/</span>
-                    {event.message}
-                  </div>
-                ))}
-              </div>
+              <DeploymentOperationSummary
+                operation={operation}
+                events={operationEvents.data || []}
+              />
             )}
           </div>
           <textarea
@@ -394,49 +263,12 @@ export function Health() {
           />
         </div>
       </Panel>
-      <Panel title="Deployments">
-        <div className="divide-y divide-slate-800/50">
-          {(deployments.data || []).map((deployment) => (
-            <div key={deployment.deployment_id} className="grid gap-3 p-5 text-sm md:grid-cols-[1fr_120px_120px_1fr]">
-              <span className="font-bold text-slate-200">{deployment.workload_name}</span>
-              <span className="text-xs text-slate-400">{deployment.target}</span>
-              <StateBadge state={deployment.status} />
-              <span className="break-all font-mono text-[10px] text-slate-500">{deployment.endpoint || "-"}</span>
-            </div>
-          ))}
-          {(deployments.data || []).length === 0 && (
-            <div className="p-6 text-center text-xs text-slate-500">No deployment records yet</div>
-          )}
-        </div>
-      </Panel>
-      <Panel title="Deployment Operations">
-        <div className="divide-y divide-slate-800/50">
-          {(deploymentOperations.data || []).map((item) => (
-            <button
-              key={item.operation_id}
-              className={`grid w-full gap-3 p-5 text-left text-sm transition-colors md:grid-cols-[110px_1fr_120px_120px_160px] ${
-                operation?.operation_id === item.operation_id
-                  ? "bg-emerald-500/5"
-                  : "hover:bg-slate-800/10"
-              }`}
-              onClick={() => setOperation(item)}
-            >
-              <span className="font-mono text-[10px] font-semibold text-sky-300">
-                {item.operation_id.slice(0, 8)}
-              </span>
-              <span className="font-bold text-slate-200">{item.workload_name}</span>
-              <span className="text-xs text-slate-400">{item.action}</span>
-              <StateBadge state={item.status} />
-              <span className="text-[10px] text-slate-500">{formatDate(item.created_at)}</span>
-            </button>
-          ))}
-          {(deploymentOperations.data || []).length === 0 && (
-            <div className="p-6 text-center text-xs text-slate-500">
-              No deployment operations recorded
-            </div>
-          )}
-        </div>
-      </Panel>
+      <DeploymentsPanel deployments={deployments.data || []} />
+      <DeploymentOperationsPanel
+        operations={deploymentOperations.data || []}
+        selectedOperationId={operation?.operation_id}
+        onSelect={setOperation}
+      />
     </div>
   );
 }

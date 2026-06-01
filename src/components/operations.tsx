@@ -3,6 +3,7 @@ import type {
   DeploymentOperation,
   DeploymentOperationEvent,
   DeploymentPlan,
+  PreflightCheck,
   PreflightResponse,
   SecretInventory,
   WorkloadHealth
@@ -97,10 +98,11 @@ export function PreflightSummary({ preflight }: { preflight: PreflightResponse }
         {preflight.checks.map((check) => (
           <div key={check.name} className="rounded border border-slate-800 bg-[#050811] p-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-semibold text-slate-300">{check.name}</span>
+              <span className="font-semibold text-slate-300">{preflightCheckLabel(check.name)}</span>
               <StateBadge state={check.status} />
             </div>
             <div className="mt-1 text-slate-400">{check.message}</div>
+            <PreflightMetadata check={check} />
             {check.remediation && (
               <div className="mt-1 text-amber-300">{check.remediation}</div>
             )}
@@ -109,6 +111,80 @@ export function PreflightSummary({ preflight }: { preflight: PreflightResponse }
       </div>
     </div>
   );
+}
+
+const PREFLIGHT_CHECK_LABELS: Record<string, string> = {
+  manifest: "Manifest",
+  deployment_target: "Deployment Target",
+  deployment_record: "Deployment Record",
+  runtime_location: "Runtime Location",
+  secrets: "Secrets",
+  agent_adapter: "Agent Adapter",
+  postgres: "Postgres",
+  redis: "Redis",
+  worker_dispatch: "Worker Dispatch",
+  runtime_reachability: "Runtime Reachability"
+};
+
+function preflightCheckLabel(name: string): string {
+  return PREFLIGHT_CHECK_LABELS[name] || name.split("_").map((part) => part.slice(0, 1).toUpperCase() + part.slice(1)).join(" ");
+}
+
+function PreflightMetadata({ check }: { check: PreflightCheck }) {
+  const entries = preflightMetadataEntries(check);
+  if (entries.length === 0) return null;
+  return (
+    <div className="mt-2 flex flex-wrap gap-1.5">
+      {entries.map(([label, value]) => (
+        <span key={`${label}:${value}`} className="rounded border border-slate-700/70 bg-slate-900/70 px-2 py-1 text-[10px] text-slate-300">
+          <span className="text-slate-500">{label}</span> {value}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function preflightMetadataEntries(check: PreflightCheck): Array<[string, string]> {
+  const metadata = check.metadata || {};
+  if (check.name === "secrets") {
+    return [
+      ["required", listCount(metadata.required)],
+      ["missing", listValue(metadata.missing)]
+    ].filter((entry): entry is [string, string] => Boolean(entry[1]));
+  }
+  if (check.name === "worker_dispatch") {
+    return [
+      ["consumers", scalarValue(metadata.consumers)],
+      ["pending", scalarValue(metadata.pending)],
+      ["lag", scalarValue(metadata.lag)]
+    ].filter((entry): entry is [string, string] => Boolean(entry[1]));
+  }
+  if (check.name === "runtime_reachability") {
+    return [["endpoints", listValue(metadata.endpoints)]].filter((entry): entry is [string, string] => Boolean(entry[1]));
+  }
+  if (check.name === "deployment_record") {
+    return [
+      ["target", scalarValue(metadata.target)],
+      ["status", scalarValue(metadata.status)],
+      ["endpoint", scalarValue(metadata.endpoint)]
+    ].filter((entry): entry is [string, string] => Boolean(entry[1]));
+  }
+  return [];
+}
+
+function scalarValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  return String(value);
+}
+
+function listValue(value: unknown): string {
+  if (!Array.isArray(value) || value.length === 0) return "";
+  return value.map(String).join(", ");
+}
+
+function listCount(value: unknown): string {
+  if (!Array.isArray(value) || value.length === 0) return "";
+  return String(value.length);
 }
 
 export function DeploymentPlanSummary({ plan }: { plan: DeploymentPlan }) {

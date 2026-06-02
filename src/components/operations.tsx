@@ -294,9 +294,13 @@ export function DeploymentsPanel({ deployments }: { deployments: Deployment[] })
     <Panel title="Deployments">
       <div className="divide-y divide-slate-800/50">
         {deployments.map((deployment) => (
-          <div key={deployment.deployment_id} className="grid gap-3 p-5 text-sm md:grid-cols-[1fr_120px_120px_1fr]">
+          <div
+            key={deployment.deployment_id}
+            className="grid gap-3 p-5 text-sm md:grid-cols-[1fr_100px_100px_120px_1fr]"
+          >
             <span className="font-bold text-slate-200">{deployment.workload_name}</span>
             <span className="text-xs text-slate-400">{deployment.target}</span>
+            <span className="text-xs text-slate-400">{deployment.env}</span>
             <StateBadge state={deployment.status} />
             <span className="break-all font-mono text-[10px] text-slate-500">{deployment.endpoint || "-"}</span>
           </div>
@@ -324,7 +328,7 @@ export function DeploymentOperationsPanel({
         {operations.map((item) => (
           <button
             key={item.operation_id}
-            className={`grid w-full gap-3 p-5 text-left text-sm transition-colors md:grid-cols-[110px_1fr_120px_120px_160px] ${
+            className={`grid w-full gap-3 p-5 text-left text-sm transition-colors md:grid-cols-[110px_1fr_90px_90px_100px_120px_160px] ${
               selectedOperationId === item.operation_id
                 ? "bg-emerald-500/5"
                 : "hover:bg-slate-800/10"
@@ -335,6 +339,8 @@ export function DeploymentOperationsPanel({
               {item.operation_id.slice(0, 8)}
             </span>
             <span className="font-bold text-slate-200">{item.workload_name}</span>
+            <span className="text-xs text-slate-400">{item.target}</span>
+            <span className="text-xs text-slate-400">{item.env}</span>
             <span className="text-xs text-slate-400">{item.action}</span>
             <StateBadge state={item.status} />
             <span className="text-[10px] text-slate-500">{formatDate(item.created_at)}</span>

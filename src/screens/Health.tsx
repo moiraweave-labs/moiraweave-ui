@@ -97,7 +97,7 @@ export function Health() {
   const requestedWorkload = searchParams.get("workload") || "";
   const [workload, setWorkload] = useState(() => requestedWorkload);
   const [target, setTarget] = useState("local");
-  const [planEnv, setPlanEnv] = useState("dev");
+  const [planEnv, setPlanEnv] = useState("local");
   const [status, setStatus] = useState("running");
   const [endpoint, setEndpoint] = useState("");
   const [metadataDraft, setMetadataDraft] = useState(SAMPLE_DEPLOYMENT_METADATA);
@@ -111,7 +111,11 @@ export function Health() {
   });
   const health = useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 5000 });
   const ready = useQuery({ queryKey: ["ready"], queryFn: api.ready, refetchInterval: 5000 });
-  const deployments = useQuery({ queryKey: ["deployments"], queryFn: () => api.deployments(), refetchInterval: 10000 });
+  const deployments = useQuery({
+    queryKey: ["deployments", planEnv],
+    queryFn: () => api.deployments({ env: planEnv || undefined }),
+    refetchInterval: 10000
+  });
   const auditEvents = useQuery({
     queryKey: [
       "audit-events",
@@ -129,15 +133,18 @@ export function Health() {
     refetchInterval: 15000
   });
   const deploymentOperations = useQuery({
-    queryKey: ["deployment-operations", workload || "all"],
+    queryKey: ["deployment-operations", workload || "all", planEnv],
     queryFn: () =>
-      api.deploymentOperations({ workload_name: workload || undefined }),
+      api.deploymentOperations({
+        workload_name: workload || undefined,
+        env: planEnv || undefined
+      }),
     refetchInterval: 10000
   });
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
   const selectedWorkloadHealth = useQuery({
-    queryKey: ["workload-health", workload],
-    queryFn: () => api.workloadHealth(workload),
+    queryKey: ["workload-health", workload, planEnv],
+    queryFn: () => api.workloadHealth(workload, planEnv || undefined),
     enabled: Boolean(workload),
     refetchInterval: 10000
   });
@@ -226,6 +233,7 @@ export function Health() {
     mutationFn: () =>
       api.recordDeployment(workload, {
         target,
+        env: planEnv,
         status,
         endpoint: endpoint.trim() || undefined,
         metadata: JSON.parse(metadataDraft) as Record<string, unknown>

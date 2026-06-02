@@ -105,6 +105,7 @@ export type Deployment = {
   deployment_id: string;
   workload_name: string;
   target: string;
+  env: string;
   status: string;
   user: string;
   created_at: string;
@@ -190,6 +191,7 @@ export type DeploymentOperation = {
   action: string;
   workload_name: string;
   target: string;
+  env: string;
   status: string;
   user: string;
   created_at: string;
@@ -282,9 +284,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify(manifest)
     }),
-  deployments: (workload?: string) =>
-    request<Deployment[]>(`/v1/deployments${workload ? `?workload_name=${workload}` : ""}`),
-  workloadHealth: (name: string) => request<WorkloadHealth>(`/v1/workloads/${name}/health`),
+  deployments: (filters: { workload_name?: string; env?: string } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return request<Deployment[]>(`/v1/deployments${suffix}`);
+  },
+  workloadHealth: (name: string, env?: string) =>
+    request<WorkloadHealth>(
+      `/v1/workloads/${name}/health${env ? `?env=${encodeURIComponent(env)}` : ""}`
+    ),
   preflight: (workload: string, target: string, env = "dev") =>
     request<PreflightResponse>(`/v1/workloads/${workload}/preflight`, {
       method: "POST",
@@ -298,7 +309,13 @@ export const api = {
     ),
   recordDeployment: (
     workload: string,
-    body: { target: string; status: string; endpoint?: string; metadata?: Record<string, unknown> }
+    body: {
+      target: string;
+      env?: string;
+      status: string;
+      endpoint?: string;
+      metadata?: Record<string, unknown>;
+    }
   ) =>
     request<Deployment>(`/v1/workloads/${workload}/deployments`, {
       method: "POST",
@@ -318,6 +335,7 @@ export const api = {
   deploymentOperations: (filters: {
     workload_name?: string;
     target?: string;
+    env?: string;
     status?: string;
     action?: string;
   } = {}) => {

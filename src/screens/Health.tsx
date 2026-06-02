@@ -6,7 +6,7 @@ import { api } from "../api";
 import type { DeploymentOperation, DeploymentPlan, PreflightResponse } from "../api";
 import { useAuthProfile } from "../auth";
 import { SAMPLE_DEPLOYMENT_METADATA } from "../constants";
-import { HealthTile, Panel, PermissionNotice } from "../components/common";
+import { HealthTile, Panel, PermissionNotice, StateBadge } from "../components/common";
 import {
   DeploymentOperationSummary,
   DeploymentOperationsPanel,
@@ -24,6 +24,60 @@ function hasStatus(body: unknown, status: string): boolean {
       typeof body === "object" &&
       "status" in body &&
       String((body as { status?: unknown }).status) === status
+  );
+}
+
+type ReadinessCheck = {
+  status?: string;
+  message?: string | null;
+  latency_ms?: number | null;
+  metadata?: Record<string, unknown>;
+};
+
+function readinessChecks(body: unknown): Array<[string, ReadinessCheck]> {
+  if (!body || typeof body !== "object" || !("checks" in body)) return [];
+  const checks = (body as { checks?: unknown }).checks;
+  if (!checks || typeof checks !== "object") return [];
+  return Object.entries(checks as Record<string, ReadinessCheck>);
+}
+
+function PlatformChecks({ body }: { body: unknown }) {
+  const checks = readinessChecks(body);
+  if (!checks.length) return null;
+  return (
+    <Panel title="Platform Checks">
+      <div className="divide-y divide-slate-900">
+        {checks.map(([name, check]) => (
+          <div
+            key={name}
+            className="grid gap-3 px-5 py-4 text-xs md:grid-cols-[160px_120px_1fr]"
+          >
+            <div className="font-semibold text-slate-200">{name}</div>
+            <div>
+              <StateBadge state={check.status || "unknown"} />
+            </div>
+            <div className="space-y-2 text-slate-400">
+              <div>{check.message || "No action needed."}</div>
+              <div className="flex flex-wrap gap-2 text-[10px] text-slate-500">
+                {typeof check.latency_ms === "number" && (
+                  <span className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1">
+                    {check.latency_ms} ms
+                  </span>
+                )}
+                {Object.entries(check.metadata || {}).map(([key, value]) => (
+                  <span
+                    key={key}
+                    className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1"
+                  >
+                    {key}: {String(value)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Panel>
   );
 }
 
@@ -157,6 +211,7 @@ export function Health() {
           body={ready.data}
         />
       </div>
+      <PlatformChecks body={ready.data} />
       <Panel
         title="Operations Center"
         action={

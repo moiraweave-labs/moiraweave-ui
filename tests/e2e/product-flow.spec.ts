@@ -273,7 +273,9 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await page.getByPlaceholder("Message demo-agent...").fill("hello");
   await page.getByRole("button", { name: "Send" }).click();
 
-  await expect(page.getByText("executor.agent.call")).toBeVisible();
+  await expect(page.getByText("Run Activity")).toBeVisible();
+  await expect(page.getByText("1 active")).toBeVisible();
+  await expect(page.getByText("executor.agent.call").first()).toBeVisible();
   await expect(page.getByText("1 artifact")).toBeVisible();
 
   await page.getByRole("link", { name: "Artifacts" }).last().click();

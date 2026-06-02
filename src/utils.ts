@@ -1,5 +1,15 @@
 import type { RunEvent } from "./api";
 
+const ACTIVE_RUN_STATES = new Set([
+  "queued",
+  "starting",
+  "running",
+  "cancel_requested",
+  "cancelling"
+]);
+
+const ATTENTION_RUN_STATES = new Set(["failed", "lost", "canceled"]);
+
 export function formatDate(value?: string | null): string {
   if (!value) return "-";
   const date = new Date(value);
@@ -22,6 +32,14 @@ export function mergeEvents(stored: RunEvent[], streamed: RunEvent[]): RunEvent[
   const events = new Map<string, RunEvent>();
   for (const event of [...stored, ...streamed]) events.set(event.id, event);
   return [...events.values()].sort((a, b) => Number(a.id) - Number(b.id));
+}
+
+export function isActiveRunStatus(status?: string | null): boolean {
+  return Boolean(status && ACTIVE_RUN_STATES.has(status));
+}
+
+export function isAttentionRunStatus(status?: string | null): boolean {
+  return Boolean(status && ATTENTION_RUN_STATES.has(status));
 }
 
 export function agentAdapter(manifest: Record<string, unknown>): string | null {

@@ -1,14 +1,21 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bot, MessageSquare, Play, Plus, Send } from "lucide-react";
+import { Activity, Archive, Bot, MessageSquare, Play, Plus, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import type { AgentSession } from "../api";
+import type { AgentMessage, AgentSession } from "../api";
 import { useAuthProfile } from "../auth";
-import { ChannelPills, Panel, PermissionNotice } from "../components/common";
+import { ChannelPills, Panel, PermissionNotice, StateBadge } from "../components/common";
 import { MessageBubble } from "../components/MessageBubble";
-import { agentChannels, formatDate } from "../utils";
+import {
+  agentChannels,
+  formatDate,
+  isActiveRunStatus,
+  isAttentionRunStatus
+} from "../utils";
+
+type HistoryFilter = "all" | "active" | "attention" | "artifacts";
 
 export function AgentConsole() {
   const { canOperate } = useAuthProfile();
@@ -22,6 +29,7 @@ export function AgentConsole() {
   const [agent, setAgent] = useState(() => requestedAgent);
   const [selected, setSelected] = useState<AgentSession | null>(null);
   const [message, setMessage] = useState("");
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const queryClient = useQueryClient();
   const selectedAgent = useMemo(
     () => agents.find((item) => item.name === agent),
@@ -69,6 +77,25 @@ export function AgentConsole() {
     enabled: Boolean(agent && selected),
     refetchInterval: 2500
   });
+  const historyItems = useMemo(() => history.data || [], [history.data]);
+  const filteredHistory = useMemo(
+    () =>
+      historyItems.filter((item) => {
+        if (historyFilter === "active") return isActiveRunStatus(item.run_status);
+        if (historyFilter === "attention") return isAttentionRunStatus(item.run_status);
+        if (historyFilter === "artifacts") return Boolean(item.artifact_count);
+        return true;
+      }),
+    [historyFilter, historyItems]
+  );
+  const latestRunMessage = useMemo(
+    () => [...historyItems].reverse().find((item) => item.run_id),
+    [historyItems]
+  );
+  const activeRunCount = useMemo(
+    () => historyItems.filter((item) => isActiveRunStatus(item.run_status)).length,
+    [historyItems]
+  );
   const create = useMutation({
     mutationFn: () => api.createSession(agent),
     onSuccess: (session) => {
@@ -200,10 +227,26 @@ export function AgentConsole() {
         </div>
       </Panel>
 
-      <Panel title={selected ? `Chat Session: ${selected.session_id.slice(0, 8)}` : "Chat Workspace"}>
+      <Panel
+        title={selected ? `Chat Session: ${selected.session_id.slice(0, 8)}` : "Chat Workspace"}
+        action={
+          <select
+            className="rounded-lg border border-slate-800 bg-[#090d16] px-2.5 py-1.5 text-[11px] font-semibold text-slate-300 outline-none focus:border-slate-700 disabled:opacity-50"
+            disabled={!selected || historyItems.length === 0}
+            onChange={(event) => setHistoryFilter(event.target.value as HistoryFilter)}
+            value={historyFilter}
+          >
+            <option value="all">All messages</option>
+            <option value="active">Active runs</option>
+            <option value="attention">Needs attention</option>
+            <option value="artifacts">With artifacts</option>
+          </select>
+        }
+      >
         <div className="flex min-h-[500px] flex-col bg-[#0b0f19]/25 rounded-b-xl border-t border-slate-900">
           <div className="flex-1 space-y-4 overflow-y-auto p-5 max-h-[460px]">
-            {(history.data || []).map((item) => (
+            <AgentRunSummary message={latestRunMessage} activeRunCount={activeRunCount} />
+            {filteredHistory.map((item) => (
               <MessageBubble
                 key={item.message_id}
                 message={item}
@@ -248,6 +291,11 @@ export function AgentConsole() {
                 <p className="text-xs font-medium">Session initialized. Send a message to get started.</p>
               </div>
             )}
+            {selected && historyItems.length > 0 && filteredHistory.length === 0 && (
+              <div className="rounded-lg border border-dashed border-slate-800 bg-[#090d16]/40 p-6 text-center text-xs text-slate-500">
+                No messages match this filter.
+              </div>
+            )}
           </div>
 
           <form className="flex gap-3 border-t border-slate-800/80 bg-[#0e1322]/40 p-4" onSubmit={submit}>
@@ -268,6 +316,69 @@ export function AgentConsole() {
           </form>
         </div>
       </Panel>
+    </div>
+  );
+}
+
+function AgentRunSummary({
+  message,
+  activeRunCount
+}: {
+  message?: AgentMessage;
+  activeRunCount: number;
+}) {
+  if (!message?.run_id) return null;
+  return (
+    <div className="rounded-xl border border-slate-800 bg-[#0e1322]/70 p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-1 flex items-center gap-2">
+            <Activity className="h-4 w-4 text-emerald-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Run Activity
+            </span>
+            {activeRunCount > 0 && (
+              <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300">
+                {activeRunCount} active
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              className="font-mono text-xs font-semibold text-sky-300 underline-offset-2 hover:underline"
+              to={`/runs/${message.run_id}`}
+            >
+              {message.run_id.slice(0, 8)}
+            </Link>
+            {message.run_status && <StateBadge state={message.run_status} />}
+            <span className="text-[11px] text-slate-500">
+              {formatDate(message.latest_event?.timestamp || message.created_at)}
+            </span>
+          </div>
+          {message.latest_event && (
+            <p className="mt-2 text-xs text-slate-400">
+              {message.latest_event.type}: {message.latest_event.message}
+            </p>
+          )}
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Link
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800/60"
+            to={`/runs/${message.run_id}`}
+          >
+            <Activity className="h-3.5 w-3.5" />
+            Open Run
+          </Link>
+          <Link
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800/60"
+            to={`/artifacts?run_id=${encodeURIComponent(message.run_id)}`}
+          >
+            <Archive className="h-3.5 w-3.5" />
+            Artifacts
+            {message.artifact_count ? ` (${message.artifact_count})` : ""}
+          </Link>
+        </div>
+      </div>
     </div>
   );
 }

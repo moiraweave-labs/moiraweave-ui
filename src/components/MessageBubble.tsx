@@ -1,6 +1,7 @@
 import { Archive, Bot, CircleStop, Cpu, RefreshCcw } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { AgentMessage } from "../api";
+import { isActiveRunStatus } from "../utils";
 import { StateBadge } from "./common";
 
 export function MessageBubble({
@@ -13,11 +14,7 @@ export function MessageBubble({
   onRetry?: (text: string) => void;
 }) {
   const isUser = message.role === "user";
-  const canCancel =
-    Boolean(message.run_id) &&
-    ["queued", "starting", "running", "cancel_requested", "cancelling"].includes(
-      message.run_status || ""
-    );
+  const canCancel = Boolean(message.run_id) && isActiveRunStatus(message.run_status);
   return (
     <div className={`flex gap-3.5 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
@@ -77,6 +74,7 @@ export function MessageBubble({
                       : "border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/15"
                   }`}
                   onClick={() => onCancel(message.run_id!)}
+                  type="button"
                 >
                   <CircleStop className="h-3 w-3" />
                   Cancel
@@ -86,6 +84,7 @@ export function MessageBubble({
                 <button
                   className="inline-flex items-center gap-1 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-semibold text-white hover:bg-white/15"
                   onClick={() => onRetry(message.message)}
+                  type="button"
                 >
                   <RefreshCcw className="h-3 w-3" />
                   Retry

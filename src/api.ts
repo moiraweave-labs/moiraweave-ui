@@ -66,6 +66,14 @@ export type AgentSession = {
   metadata?: Record<string, unknown>;
 };
 
+export type AgentSessionHealth = {
+  session_id: string;
+  agent_name: string;
+  status: string;
+  latest_run_status?: string | null;
+  message_count: number;
+};
+
 export type AgentMessage = {
   message_id: string;
   session_id: string;
@@ -358,6 +366,8 @@ export const api = {
       body: JSON.stringify({ metadata: {} })
     }),
   sessions: (agent: string) => request<AgentSession[]>(`/v1/agents/${agent}/sessions`),
+  sessionHealth: (agent: string, sessionId: string) =>
+    request<AgentSessionHealth>(`/v1/agents/${agent}/sessions/${sessionId}/health`),
   message: (agent: string, sessionId: string, message: string) =>
     request<Record<string, unknown>>(`/v1/agents/${agent}/sessions/${sessionId}/messages`, {
       method: "POST",

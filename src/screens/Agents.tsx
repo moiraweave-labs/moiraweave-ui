@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api, streamRunEvents } from "../api";
-import type { AgentMessage, AgentSession, RunEvent } from "../api";
+import type { AgentMessage, AgentSession, AgentSessionHealth, RunEvent } from "../api";
 import { useAuthProfile } from "../auth";
 import { ChannelPills, Panel, PermissionNotice, StateBadge } from "../components/common";
 import { MessageBubble } from "../components/MessageBubble";
@@ -78,6 +78,12 @@ export function AgentConsole() {
     enabled: Boolean(agent && selected),
     refetchInterval: 2500
   });
+  const sessionHealth = useQuery({
+    queryKey: ["session-health", agent, selected?.session_id],
+    queryFn: () => api.sessionHealth(agent, selected!.session_id),
+    enabled: Boolean(agent && selected),
+    refetchInterval: 5000
+  });
   const historyItems = useMemo(
     () =>
       (history.data || []).map((item) => {
@@ -128,6 +134,9 @@ export function AgentConsole() {
           queryClient.invalidateQueries({
             queryKey: ["history", agent, selected.session_id]
           });
+          queryClient.invalidateQueries({
+            queryKey: ["session-health", agent, selected.session_id]
+          });
           queryClient.invalidateQueries({ queryKey: ["runs"] });
         },
         () => undefined
@@ -147,6 +156,7 @@ export function AgentConsole() {
     onSuccess: () => {
       setMessage("");
       queryClient.invalidateQueries({ queryKey: ["history", agent, selected?.session_id] });
+      queryClient.invalidateQueries({ queryKey: ["session-health", agent, selected?.session_id] });
       queryClient.invalidateQueries({ queryKey: ["runs"] });
     }
   });
@@ -154,6 +164,7 @@ export function AgentConsole() {
     mutationFn: (text: string) => api.message(agent, selected!.session_id, text),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["history", agent, selected?.session_id] });
+      queryClient.invalidateQueries({ queryKey: ["session-health", agent, selected?.session_id] });
       queryClient.invalidateQueries({ queryKey: ["runs"] });
     }
   });
@@ -161,6 +172,7 @@ export function AgentConsole() {
     mutationFn: (runId: string) => api.cancelRun(runId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["history", agent, selected?.session_id] });
+      queryClient.invalidateQueries({ queryKey: ["session-health", agent, selected?.session_id] });
       queryClient.invalidateQueries({ queryKey: ["runs"] });
     }
   });
@@ -284,6 +296,12 @@ export function AgentConsole() {
       >
         <div className="flex min-h-[500px] flex-col bg-[#0b0f19]/25 rounded-b-xl border-t border-slate-900">
           <div className="flex-1 space-y-4 overflow-y-auto p-5 max-h-[460px]">
+            {selected && (
+              <AgentSessionHealthSummary
+                health={sessionHealth.data}
+                loading={sessionHealth.isLoading}
+              />
+            )}
             <AgentRunSummary message={latestRunMessage} activeRunCount={activeRunCount} />
             {filteredHistory.map((item) => (
               <MessageBubble
@@ -355,6 +373,52 @@ export function AgentConsole() {
           </form>
         </div>
       </Panel>
+    </div>
+  );
+}
+
+function AgentSessionHealthSummary({
+  health,
+  loading
+}: {
+  health?: AgentSessionHealth;
+  loading: boolean;
+}) {
+  if (!health && !loading) return null;
+  const status = health?.status || "checking";
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-[#0e1322]/70 p-4 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="mb-2 flex items-center gap-2">
+            <Bot className="h-4 w-4 text-emerald-400" />
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+              Session Health
+            </span>
+            <StateBadge state={status} />
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-[11px] text-slate-500">
+            <span>
+              Messages{" "}
+              <span className="font-semibold text-slate-300">
+                {health?.message_count ?? "-"}
+              </span>
+            </span>
+            <span className="inline-flex items-center gap-2">
+              Latest Run
+              {health?.latest_run_status ? (
+                <StateBadge state={health.latest_run_status} />
+              ) : (
+                <span className="font-semibold text-slate-400">none</span>
+              )}
+            </span>
+          </div>
+        </div>
+        <span className="font-mono text-[11px] text-slate-500">
+          {health?.session_id.slice(0, 12) || "checking"}
+        </span>
+      </div>
     </div>
   );
 }

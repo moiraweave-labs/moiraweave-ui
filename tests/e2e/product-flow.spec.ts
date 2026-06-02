@@ -146,6 +146,20 @@ async function mockApi(page: Page) {
     }
 
     if (
+      path === "/v1/agents/demo-agent/sessions/session1/health" &&
+      method === "GET"
+    ) {
+      await json({
+        session_id: "session1",
+        agent_name: "demo-agent",
+        status: "healthy",
+        latest_run_status: history.length > 0 ? "running" : null,
+        message_count: history.length
+      });
+      return;
+    }
+
+    if (
       path === "/v1/agents/demo-agent/sessions/session1/messages" &&
       method === "GET"
     ) {
@@ -289,6 +303,8 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
 
   await page.getByRole("button", { name: "Start session" }).first().click();
   await expect(page.getByRole("heading", { name: "Chat Session: session1" })).toBeVisible();
+  await expect(page.getByText("Session Health")).toBeVisible();
+  await expect(page.getByText("Latest Run")).toBeVisible();
   await page.getByPlaceholder("Message demo-agent...").fill("hello");
   await page.getByRole("button", { name: "Send" }).click();
 

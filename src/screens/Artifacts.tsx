@@ -12,6 +12,8 @@ export function Artifacts() {
   const [sessionId, setSessionId] = useState(() => searchParams.get("session_id") || "");
   const [runId, setRunId] = useState(() => searchParams.get("run_id") || "");
   const [contentType, setContentType] = useState(() => searchParams.get("content_type") || "");
+  const [createdFrom, setCreatedFrom] = useState(() => searchParams.get("created_from") || "");
+  const [createdTo, setCreatedTo] = useState(() => searchParams.get("created_to") || "");
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,17 +22,29 @@ export function Artifacts() {
     if (sessionId) next.set("session_id", sessionId);
     if (runId) next.set("run_id", runId);
     if (contentType) next.set("content_type", contentType);
+    if (createdFrom) next.set("created_from", createdFrom);
+    if (createdTo) next.set("created_to", createdTo);
     setSearchParams(next, { replace: true });
-  }, [contentType, runId, sessionId, setSearchParams, workload]);
+  }, [contentType, createdFrom, createdTo, runId, sessionId, setSearchParams, workload]);
 
   const artifacts = useQuery({
-    queryKey: ["artifact-library", workload, sessionId, runId, contentType],
+    queryKey: [
+      "artifact-library",
+      workload,
+      sessionId,
+      runId,
+      contentType,
+      createdFrom,
+      createdTo
+    ],
     queryFn: () =>
       api.artifactLibrary({
         workload_name: workload || undefined,
         session_id: sessionId || undefined,
         run_id: runId || undefined,
-        content_type: contentType || undefined
+        content_type: contentType || undefined,
+        created_from: normalizeDateFilter(createdFrom, "from"),
+        created_to: normalizeDateFilter(createdTo, "to")
       }),
     refetchInterval: 5000
   });
@@ -56,7 +70,7 @@ export function Artifacts() {
   return (
     <div className="space-y-6">
       <Panel title="Artifact Library Filters">
-        <div className="grid gap-3 p-5 md:grid-cols-4">
+        <div className="grid gap-3 p-5 md:grid-cols-3 xl:grid-cols-6">
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Workload</label>
             <select
@@ -97,6 +111,24 @@ export function Artifacts() {
               value={contentType}
               onChange={(event) => setContentType(event.target.value)}
               placeholder="application/json"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Created From</label>
+            <input
+              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+              type="datetime-local"
+              value={createdFrom}
+              onChange={(event) => setCreatedFrom(event.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Created To</label>
+            <input
+              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+              type="datetime-local"
+              value={createdTo}
+              onChange={(event) => setCreatedTo(event.target.value)}
             />
           </div>
         </div>
@@ -144,4 +176,11 @@ export function Artifacts() {
       </div>
     </div>
   );
+}
+
+function normalizeDateFilter(value: string, boundary: "from" | "to"): string | undefined {
+  if (!value) return undefined;
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
+    ? `${value}:${boundary === "to" ? "59" : "00"}`
+    : value;
 }

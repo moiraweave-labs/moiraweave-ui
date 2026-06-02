@@ -340,6 +340,8 @@ export const api = {
     session_id?: string;
     run_id?: string;
     content_type?: string;
+    created_from?: string;
+    created_to?: string;
   }) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {

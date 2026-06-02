@@ -70,37 +70,61 @@ export function Workloads() {
                 <th className="px-5 py-3">Image</th>
                 <th className="px-5 py-3">Agent</th>
                 <th className="px-5 py-3">Health</th>
+                <th className="px-5 py-3">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
-              {isLoading && <RowMessage colSpan={6} text="Loading workloads..." />}
-              {error && <RowMessage colSpan={6} text="Request failed" />}
-              {data.map((workload) => (
-                <tr key={workload.name} className="hover:bg-slate-800/10 transition-colors align-top">
-                  <td className="px-5 py-4 font-bold text-slate-200">{workload.name}</td>
-                  <td className="px-5 py-4 text-xs font-medium text-slate-300">
-                    <span className="rounded bg-slate-800 px-2 py-0.5 border border-slate-700/50">{workload.type}</span>
-                  </td>
-                  <td className="px-5 py-4 text-xs text-slate-400">{workload.execution_mode}</td>
-                  <td className="max-w-md truncate px-5 py-4 text-xs text-slate-500 font-mono">
-                    {workload.image || "-"}
-                  </td>
-                  <td className="px-5 py-4 text-xs text-slate-400">
-                    {agentAdapter(workload.manifest) ? (
-                      <span className="inline-flex items-center gap-1 text-emerald-400 font-medium bg-emerald-500/5 border border-emerald-500/10 px-2 py-0.5 rounded">
-                        <Bot className="h-3 w-3" />
-                        {agentAdapter(workload.manifest)}
-                      </span>
-                    ) : (
-                      "-"
-                    )}
-                  </td>
-                  <td className="px-5 py-4 text-xs text-slate-400">
-                    <WorkloadHealthBadge name={workload.name} />
-                  </td>
-                </tr>
-              ))}
-              {data.length === 0 && !isLoading && <RowMessage colSpan={6} text="No workloads registered" />}
+              {isLoading && <RowMessage colSpan={7} text="Loading workloads..." />}
+              {error && <RowMessage colSpan={7} text="Request failed" />}
+              {data.map((workload) => {
+                const adapter = agentAdapter(workload.manifest);
+                return (
+                  <tr key={workload.name} className="hover:bg-slate-800/10 transition-colors align-top">
+                    <td className="px-5 py-4 font-bold text-slate-200">{workload.name}</td>
+                    <td className="px-5 py-4 text-xs font-medium text-slate-300">
+                      <span className="rounded bg-slate-800 px-2 py-0.5 border border-slate-700/50">{workload.type}</span>
+                    </td>
+                    <td className="px-5 py-4 text-xs text-slate-400">{workload.execution_mode}</td>
+                    <td className="max-w-md truncate px-5 py-4 text-xs text-slate-500 font-mono">
+                      {workload.image || "-"}
+                    </td>
+                    <td className="px-5 py-4 text-xs text-slate-400">
+                      {adapter ? (
+                        <span className="inline-flex items-center gap-1 text-emerald-400 font-medium bg-emerald-500/5 border border-emerald-500/10 px-2 py-0.5 rounded">
+                          <Bot className="h-3 w-3" />
+                          {adapter}
+                        </span>
+                      ) : (
+                        "-"
+                      )}
+                    </td>
+                    <td className="px-5 py-4 text-xs text-slate-400">
+                      <WorkloadHealthBadge name={workload.name} />
+                    </td>
+                    <td className="px-5 py-4 text-xs text-slate-400">
+                      <div className="flex flex-wrap gap-2">
+                        <Link
+                          className="inline-flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-900/40 px-2.5 py-1 font-semibold text-slate-300 hover:bg-slate-800/60"
+                          to={`/health?workload=${encodeURIComponent(workload.name)}`}
+                        >
+                          <Server className="h-3 w-3" />
+                          Operations
+                        </Link>
+                        {workload.type === "agent-service" && (
+                          <Link
+                            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-200 hover:bg-emerald-500/15"
+                            to={`/agents?agent=${encodeURIComponent(workload.name)}`}
+                          >
+                            <Bot className="h-3 w-3" />
+                            Console
+                          </Link>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {data.length === 0 && !isLoading && <RowMessage colSpan={7} text="No workloads registered" />}
             </tbody>
           </table>
         </div>

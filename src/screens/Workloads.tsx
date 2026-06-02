@@ -7,13 +7,14 @@ import type { WorkloadTemplate } from "../api";
 import { useAuthProfile } from "../auth";
 import { SAMPLE_WORKLOAD } from "../constants";
 import {
+  ChannelPills,
   ErrorMessage,
   Panel,
   PermissionNotice,
   RowMessage,
   WorkloadHealthBadge
 } from "../components/common";
-import { agentAdapter } from "../utils";
+import { agentAdapter, agentChannels, stringList } from "../utils";
 
 export function Workloads() {
   const queryClient = useQueryClient();
@@ -264,6 +265,7 @@ export function Workloads() {
 }
 
 function TemplateSummary({ template }: { template: WorkloadTemplate }) {
+  const details = templateDetails(template.manifest);
   return (
     <div className="rounded-lg border border-slate-800/80 bg-[#0b0f19]/50 p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -277,6 +279,79 @@ function TemplateSummary({ template }: { template: WorkloadTemplate }) {
         ))}
       </div>
       <p className="mt-2 text-xs leading-relaxed text-slate-400">{template.description}</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <TemplateDetail label="Adapter" value={details.adapter || "-"} />
+        <TemplateDetail label="Ports" value={details.ports || "-"} />
+        <TemplateDetail label="Secrets" value={details.secrets || "none"} />
+        <TemplateDetail label="Persistence" value={details.persistence || "disabled"} />
+      </div>
+      {details.hasChannels && (
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <div className="rounded-lg border border-slate-800 bg-[#050811] p-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              MoiraWeave Channels
+            </span>
+            <ChannelPills channels={details.channels.exposed} empty="None" tone="emerald" />
+          </div>
+          <div className="rounded-lg border border-slate-800 bg-[#050811] p-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Runtime-Owned
+            </span>
+            <ChannelPills channels={details.channels.externalOwned} empty="None" tone="amber" />
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+function TemplateDetail({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-slate-800 bg-[#050811] p-2">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+        {label}
+      </div>
+      <div className="mt-1 break-words font-mono text-[11px] text-slate-300">{value}</div>
+    </div>
+  );
+}
+
+function templateDetails(manifest?: Record<string, unknown> | null) {
+  const spec = objectValue(manifest?.spec);
+  const agent = objectValue(spec.agent);
+  const ports = Array.isArray(spec.ports)
+    ? spec.ports
+        .map((item) => {
+          const port = objectValue(item);
+          const name = typeof port.name === "string" ? port.name : "port";
+          return port.port ? `${name}:${port.port}` : "";
+        })
+        .filter(Boolean)
+        .join(", ")
+    : "";
+  const secrets = [
+    ...stringList(spec.secrets),
+    ...stringList(agent.requiredSecrets)
+  ].filter((secret, index, all) => all.indexOf(secret) === index);
+  const persistence = objectValue(spec.persistence);
+  const channels = agentChannels(manifest || undefined);
+  const persistenceLabel =
+    persistence.enabled === true
+      ? String(persistence.mountPath || "enabled")
+      : "";
+
+  return {
+    adapter: typeof agent.adapter === "string" ? agent.adapter : "",
+    ports,
+    secrets: secrets.join(", "),
+    persistence: persistenceLabel,
+    channels,
+    hasChannels: channels.exposed.length > 0 || channels.externalOwned.length > 0
+  };
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }

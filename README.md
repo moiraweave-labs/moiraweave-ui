@@ -33,6 +33,7 @@ Gateway, but host execution stays with CLI, CI, or a future deployment operator.
 
 ```bash
 npm ci
+npm run lint
 npm run dev
 ```
 
@@ -45,6 +46,7 @@ VITE_API_BASE_URL=http://localhost:8000 npm run dev
 ## Tests
 
 ```bash
+npm run lint
 npm run test:e2e
 ```
 

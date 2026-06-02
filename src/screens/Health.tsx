@@ -1,5 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Plus, RefreshCcw, ScrollText, Terminal } from "lucide-react";
+import {
+  CheckCircle2,
+  Plus,
+  RefreshCcw,
+  Rocket,
+  ScrollText,
+  Terminal,
+  Trash2
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
@@ -160,6 +168,34 @@ export function Health() {
       queryClient.invalidateQueries({ queryKey: ["deployment-operations"] });
     }
   });
+  const applyOperation = useMutation({
+    mutationFn: () =>
+      api.deploymentOperation({
+        action: "apply",
+        workload_name: workload,
+        target,
+        env: planEnv,
+        metadata: { source: "moiraweave-ui" }
+      }),
+    onSuccess: (response) => {
+      setOperation(response);
+      queryClient.invalidateQueries({ queryKey: ["deployment-operations"] });
+    }
+  });
+  const undeployOperation = useMutation({
+    mutationFn: () =>
+      api.deploymentOperation({
+        action: "undeploy",
+        workload_name: workload,
+        target,
+        env: planEnv,
+        metadata: { source: "moiraweave-ui" }
+      }),
+    onSuccess: (response) => {
+      setOperation(response);
+      queryClient.invalidateQueries({ queryKey: ["deployment-operations"] });
+    }
+  });
   const recordDeployment = useMutation({
     mutationFn: () =>
       api.recordDeployment(workload, {
@@ -249,6 +285,22 @@ export function Health() {
               Logs
             </button>
             <button
+              className="inline-flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3 py-1.5 text-xs font-semibold text-sky-300 transition-all hover:bg-sky-500/20 disabled:text-slate-600"
+              disabled={!canOperate || !workload || applyOperation.isPending}
+              onClick={() => applyOperation.mutate()}
+            >
+              <Rocket className="h-3.5 w-3.5" />
+              Apply
+            </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-300 transition-all hover:bg-red-500/20 disabled:text-slate-600"
+              disabled={!canOperate || !workload || undeployOperation.isPending}
+              onClick={() => undeployOperation.mutate()}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Undeploy
+            </button>
+            <button
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
               disabled={!canOperate || !workload || recordDeployment.isPending}
               onClick={() => recordDeployment.mutate()}
@@ -332,6 +384,8 @@ export function Health() {
             <OperationError error={preflightMutation.error} fallback="Preflight failed. Check workload and role." />
             <OperationError error={syncOperation.error} fallback="Deployment sync failed. Check workload and role." />
             <OperationError error={logsOperation.error} fallback="Log guidance failed. Check workload and role." />
+            <OperationError error={applyOperation.error} fallback="Apply guidance failed. Check workload and role." />
+            <OperationError error={undeployOperation.error} fallback="Undeploy guidance failed. Check workload and role." />
             {selectedWorkloadHealth.data && (
               <WorkloadHealthSummary health={selectedWorkloadHealth.data} />
             )}

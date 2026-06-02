@@ -235,7 +235,11 @@ export function DeploymentOperationSummary({
   operation: DeploymentOperation;
   events: DeploymentOperationEvent[];
 }) {
-  const commands = commandList(operation.metadata.log_commands);
+  const commands = [
+    ...commandList(operation.metadata.log_commands),
+    ...commandList(operation.metadata.action_commands)
+  ];
+  const nextActions = commandList(operation.metadata.next_actions);
   return (
     <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
       <div className="grid gap-2 sm:grid-cols-3">
@@ -243,6 +247,11 @@ export function DeploymentOperationSummary({
         <Metric label="Action" value={<span className="text-slate-300">{operation.action}</span>} />
         <Metric label="Status" value={<StateBadge state={operation.status} />} />
       </div>
+      {typeof operation.metadata.blocked_reason === "string" && (
+        <div className="rounded border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+          {operation.metadata.blocked_reason}
+        </div>
+      )}
       {commands.length > 0 && (
         <div className="space-y-1">
           <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Commands</span>
@@ -250,6 +259,16 @@ export function DeploymentOperationSummary({
             <code key={command} className="block whitespace-pre-wrap rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-sky-300">
               {command}
             </code>
+          ))}
+        </div>
+      )}
+      {nextActions.length > 0 && (
+        <div className="space-y-1">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Next Actions</span>
+          {nextActions.map((action) => (
+            <div key={action} className="rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-slate-300">
+              {action}
+            </div>
           ))}
         </div>
       )}

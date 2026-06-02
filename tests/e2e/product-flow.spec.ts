@@ -45,8 +45,16 @@ async function mockApi(page: Page) {
     const url = new URL(request.url());
     const path = url.pathname;
     const method = request.method();
+    const resourceType = request.resourceType();
+    const isHealthApiRequest =
+      (path === "/health" || path === "/ready") &&
+      (resourceType === "fetch" || resourceType === "xhr");
 
-    if (!path.startsWith("/auth") && !path.startsWith("/v1")) {
+    if (
+      !path.startsWith("/auth") &&
+      !path.startsWith("/v1") &&
+      !isHealthApiRequest
+    ) {
       await route.continue();
       return;
     }
@@ -75,6 +83,27 @@ async function mockApi(page: Page) {
         role: "admin",
         credential_type: "jwt",
         api_key_id: null
+      });
+      return;
+    }
+
+    if (path === "/health" && method === "GET") {
+      await json({ status: "ok", version: "e2e" });
+      return;
+    }
+
+    if (path === "/ready" && method === "GET") {
+      await json({
+        status: "ready",
+        checks: {
+          postgres: { status: "passed", message: "Postgres is reachable." },
+          redis: { status: "passed", message: "Redis is reachable." },
+          worker_dispatch: {
+            status: "passed",
+            message: "Worker consumer is attached.",
+            metadata: { consumers: 1, pending: 0, lag: 0 }
+          }
+        }
       });
       return;
     }
@@ -114,6 +143,36 @@ async function mockApi(page: Page) {
         workloads.push(demoWorkload);
       }
       await json(demoWorkload, 201);
+      return;
+    }
+
+    if (path === "/v1/deployments" && method === "GET") {
+      await json([]);
+      return;
+    }
+
+    if (path === "/v1/deployment-operations" && method === "GET") {
+      await json([]);
+      return;
+    }
+
+    if (path === "/v1/secrets" && method === "GET") {
+      await json({ status: "ok", total: 0, missing: 0, secrets: [] });
+      return;
+    }
+
+    if (path === "/v1/audit-events" && method === "GET") {
+      await json([
+        {
+          event_id: "1",
+          timestamp: "2026-05-26T08:01:00+00:00",
+          actor: "admin",
+          action: "agent.message",
+          resource_type: "agent_session",
+          resource_id: "session1",
+          metadata: { agent_name: "demo-agent", run_id: "run-1" }
+        }
+      ]);
       return;
     }
 
@@ -344,4 +403,11 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "File" }).click();
   expect((await download).suggestedFilename()).toBe("demo-reply.json");
+
+  await page.goto("/operations?workload=demo-agent");
+  await expect(page.getByRole("heading", { name: "Operations Center" })).toBeVisible();
+  await expect(page.getByText("Platform Checks")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Audit Trail" })).toBeVisible();
+  await expect(page.getByText("agent.message")).toBeVisible();
+  await expect(page.getByText("session1").last()).toBeVisible();
 });

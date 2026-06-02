@@ -1,4 +1,5 @@
 import type {
+  AuditEvent,
   Deployment,
   DeploymentOperation,
   DeploymentOperationEvent,
@@ -346,6 +347,119 @@ export function DeploymentOperationsPanel({
         )}
       </div>
     </Panel>
+  );
+}
+
+export type AuditEventFilters = {
+  action: string;
+  resourceType: string;
+  resourceId: string;
+};
+
+export function AuditEventsPanel({
+  events,
+  filters,
+  isLoading,
+  error,
+  onFiltersChange
+}: {
+  events: AuditEvent[];
+  filters: AuditEventFilters;
+  isLoading: boolean;
+  error: unknown;
+  onFiltersChange: (filters: AuditEventFilters) => void;
+}) {
+  return (
+    <Panel title="Audit Trail">
+      <div className="grid gap-3 border-b border-slate-800/50 p-5 md:grid-cols-3">
+        <AuditFilterInput
+          label="Action"
+          placeholder="run.cancel"
+          value={filters.action}
+          onChange={(action) => onFiltersChange({ ...filters, action })}
+        />
+        <AuditFilterInput
+          label="Resource Type"
+          placeholder="run, artifact..."
+          value={filters.resourceType}
+          onChange={(resourceType) => onFiltersChange({ ...filters, resourceType })}
+        />
+        <AuditFilterInput
+          label="Resource ID"
+          placeholder="id"
+          value={filters.resourceId}
+          onChange={(resourceId) => onFiltersChange({ ...filters, resourceId })}
+        />
+      </div>
+      {Boolean(error) && (
+        <div className="p-5">
+          <ErrorMessage error={error} fallback="Unable to load audit events." />
+        </div>
+      )}
+      <div className="divide-y divide-slate-800/50">
+        {events.map((event) => (
+          <div
+            key={event.event_id}
+            className="grid gap-3 p-5 text-sm md:grid-cols-[160px_1fr_150px_1fr]"
+          >
+            <div>
+              <div className="font-mono text-[10px] font-semibold text-sky-300">
+                {event.event_id}
+              </div>
+              <div className="mt-1 text-[10px] text-slate-500">
+                {formatDate(event.timestamp)}
+              </div>
+            </div>
+            <div>
+              <div className="font-semibold text-slate-200">{event.action}</div>
+              <div className="mt-1 break-all font-mono text-[10px] text-slate-500">
+                {event.actor}
+              </div>
+            </div>
+            <div>
+              <StateBadge state={event.resource_type} />
+              <div className="mt-1 break-all font-mono text-[10px] text-slate-500">
+                {event.resource_id}
+              </div>
+            </div>
+            <pre className="max-h-24 overflow-auto rounded border border-slate-900 bg-[#050811] p-2 text-[10px] text-emerald-400/80">
+              {JSON.stringify(event.metadata || {}, null, 2)}
+            </pre>
+          </div>
+        ))}
+        {events.length === 0 && (
+          <div className="p-6 text-center text-xs text-slate-500">
+            {isLoading ? "Loading audit events..." : "No audit events match the current filters"}
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+function AuditFilterInput({
+  label,
+  placeholder,
+  value,
+  onChange
+}: {
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      <span className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        {label}
+      </span>
+      <input
+        className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+      />
+    </label>
   );
 }
 

@@ -16,6 +16,7 @@ import { useAuthProfile } from "../auth";
 import { SAMPLE_DEPLOYMENT_METADATA } from "../constants";
 import { HealthTile, Panel, PermissionNotice, StateBadge } from "../components/common";
 import {
+  AuditEventsPanel,
   DeploymentOperationSummary,
   DeploymentOperationsPanel,
   DeploymentPlanSummary,
@@ -103,9 +104,30 @@ export function Health() {
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
   const [preflight, setPreflight] = useState<PreflightResponse | null>(null);
   const [operation, setOperation] = useState<DeploymentOperation | null>(null);
+  const [auditFilters, setAuditFilters] = useState({
+    action: "",
+    resourceType: "",
+    resourceId: ""
+  });
   const health = useQuery({ queryKey: ["health"], queryFn: api.health, refetchInterval: 5000 });
   const ready = useQuery({ queryKey: ["ready"], queryFn: api.ready, refetchInterval: 5000 });
   const deployments = useQuery({ queryKey: ["deployments"], queryFn: () => api.deployments(), refetchInterval: 10000 });
+  const auditEvents = useQuery({
+    queryKey: [
+      "audit-events",
+      auditFilters.action,
+      auditFilters.resourceType,
+      auditFilters.resourceId
+    ],
+    queryFn: () =>
+      api.auditEvents({
+        action: auditFilters.action.trim() || undefined,
+        resource_type: auditFilters.resourceType.trim() || undefined,
+        resource_id: auditFilters.resourceId.trim() || undefined,
+        limit: 25
+      }),
+    refetchInterval: 15000
+  });
   const deploymentOperations = useQuery({
     queryKey: ["deployment-operations", workload || "all"],
     queryFn: () =>
@@ -152,6 +174,7 @@ export function Health() {
       queryClient.invalidateQueries({ queryKey: ["deployments"] });
       queryClient.invalidateQueries({ queryKey: ["deployment-operations"] });
       queryClient.invalidateQueries({ queryKey: ["workload-health", workload] });
+      queryClient.invalidateQueries({ queryKey: ["audit-events"] });
     }
   });
   const logsOperation = useMutation({
@@ -166,6 +189,7 @@ export function Health() {
     onSuccess: (response) => {
       setOperation(response);
       queryClient.invalidateQueries({ queryKey: ["deployment-operations"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-events"] });
     }
   });
   const applyOperation = useMutation({
@@ -180,6 +204,7 @@ export function Health() {
     onSuccess: (response) => {
       setOperation(response);
       queryClient.invalidateQueries({ queryKey: ["deployment-operations"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-events"] });
     }
   });
   const undeployOperation = useMutation({
@@ -194,6 +219,7 @@ export function Health() {
     onSuccess: (response) => {
       setOperation(response);
       queryClient.invalidateQueries({ queryKey: ["deployment-operations"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-events"] });
     }
   });
   const recordDeployment = useMutation({
@@ -207,6 +233,7 @@ export function Health() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployments"] });
       queryClient.invalidateQueries({ queryKey: ["workload-health", workload] });
+      queryClient.invalidateQueries({ queryKey: ["audit-events"] });
     }
   });
 
@@ -417,6 +444,13 @@ export function Health() {
         operations={deploymentOperations.data || []}
         selectedOperationId={operation?.operation_id}
         onSelect={setOperation}
+      />
+      <AuditEventsPanel
+        events={auditEvents.data || []}
+        filters={auditFilters}
+        isLoading={auditEvents.isLoading}
+        error={auditEvents.error}
+        onFiltersChange={setAuditFilters}
       />
     </div>
   );

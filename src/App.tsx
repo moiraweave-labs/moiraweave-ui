@@ -38,7 +38,7 @@ function Shell() {
     { to: "/runs", label: "Runs", icon: Activity },
     { to: "/agents", label: "Agents", icon: Bot },
     { to: "/artifacts", label: "Artifacts", icon: Archive },
-    { to: "/health", label: "Operations", icon: Server }
+    { to: "/operations", label: "Operations", icon: Server }
   ];
 
   function onTokenChange(next: string) {
@@ -148,7 +148,7 @@ function Shell() {
               <Route path="/runs/:runId" element={<RunDetail />} />
               <Route path="/agents" element={<AgentConsole />} />
               <Route path="/artifacts" element={<Artifacts />} />
-              <Route path="/health" element={<Health />} />
+              <Route path="/operations" element={<Health />} />
             </Routes>
           )}
         </div>

@@ -207,6 +207,16 @@ export type DeploymentOperationEvent = {
   data: Record<string, unknown>;
 };
 
+export type AuditEvent = {
+  event_id: string;
+  timestamp: string;
+  actor: string;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  metadata: Record<string, unknown>;
+};
+
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "";
 
 export function getToken(): string {
@@ -320,6 +330,20 @@ export const api = {
   },
   deploymentOperationEvents: (id: string) =>
     request<DeploymentOperationEvent[]>(`/v1/deployment-operations/${id}/events`),
+  auditEvents: (filters: {
+    action?: string;
+    resource_type?: string;
+    resource_id?: string;
+    limit?: number;
+    offset?: number;
+  } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") params.set(key, String(value));
+    });
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return request<AuditEvent[]>(`/v1/audit-events${suffix}`);
+  },
   runs: (workload?: string) =>
     request<RunStatus[]>(`/v1/runs${workload ? `?workload_name=${workload}` : ""}`),
   submitRun: (workload: string, payload: Record<string, unknown>) =>

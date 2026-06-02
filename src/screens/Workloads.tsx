@@ -105,7 +105,7 @@ export function Workloads() {
                       <div className="flex flex-wrap gap-2">
                         <Link
                           className="inline-flex items-center gap-1.5 rounded-md border border-slate-800 bg-slate-900/40 px-2.5 py-1 font-semibold text-slate-300 hover:bg-slate-800/60"
-                          to={`/health?workload=${encodeURIComponent(workload.name)}`}
+                          to={`/operations?workload=${encodeURIComponent(workload.name)}`}
                         >
                           <Server className="h-3 w-3" />
                           Operations
@@ -215,7 +215,7 @@ export function Workloads() {
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Link
                     className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 font-semibold text-emerald-200 hover:bg-emerald-500/15"
-                    to={`/health?workload=${encodeURIComponent(createdWorkload.name)}`}
+                    to={`/operations?workload=${encodeURIComponent(createdWorkload.name)}`}
                   >
                     <Server className="h-3 w-3" />
                     Run preflight

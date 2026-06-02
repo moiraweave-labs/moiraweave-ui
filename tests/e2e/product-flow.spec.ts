@@ -215,6 +215,22 @@ async function mockApi(page: Page) {
       return;
     }
 
+    if (path === "/v1/runs/run-1" && method === "GET") {
+      await json({
+        run_id: "run-1",
+        workload_name: "demo-agent",
+        status: "running",
+        user: "admin",
+        created_at: "2026-05-26T08:01:00+00:00",
+        heartbeat_at: "2026-05-26T08:01:02+00:00",
+        session_id: "session1",
+        payload: { session_id: "session1", message: "hello" },
+        result: null,
+        error: null
+      });
+      return;
+    }
+
     if (path === "/v1/runs/run-1/events/stream" && method === "GET") {
       await route.fulfill({
         status: 200,
@@ -318,6 +334,12 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByText("demo-reply.json").first()).toBeVisible();
   await expect(page.getByText('"source": "demo-agent"')).toBeVisible();
   await expect(page.getByText('"reply": "Demo agent received: hello"')).toBeVisible();
+  await page.getByRole("link", { name: "session1" }).click();
+  await expect(page).toHaveURL(/\/agents\?agent=demo-agent&session_id=session1/);
+  await expect(page.getByRole("heading", { name: "Chat Session: session1" })).toBeVisible();
+
+  await page.getByRole("navigation").getByRole("link", { name: "Artifacts" }).click();
+  await expect(page).toHaveURL(/\/artifacts/);
 
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "File" }).click();

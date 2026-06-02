@@ -4,13 +4,27 @@ import { Link } from "react-router-dom";
 import { api } from "../api";
 import type { Artifact } from "../api";
 import { formatBytes, formatDate, isServedArtifactUri } from "../utils";
-import { Metric, Panel } from "./common";
+import { Metric, Panel, StateBadge } from "./common";
 
 export function ArtifactDetails({ artifact }: { artifact: Artifact }) {
   const metadata = artifact.metadata || {};
   const metadataText = JSON.stringify(metadata, null, 2);
   const hasMetadata = Object.keys(metadata).length > 0;
   const canServeContent = isServedArtifactUri(artifact.uri);
+  const run = useQuery({
+    queryKey: ["run", artifact.run_id],
+    queryFn: () => api.run(artifact.run_id),
+    retry: false
+  });
+  const workloadName =
+    run.data?.workload_name || metadataString(metadata, ["workload_name", "source"]);
+  const sessionId = run.data?.session_id || metadataString(metadata, ["session_id"]);
+  const agentSessionPath =
+    workloadName && sessionId
+      ? `/agents?agent=${encodeURIComponent(workloadName)}&session_id=${encodeURIComponent(
+          sessionId
+        )}`
+      : "";
   const preview = useQuery({
     queryKey: ["artifact-preview", artifact.run_id, artifact.id],
     queryFn: () => api.artifactPreview(artifact.run_id, artifact.id),
@@ -75,6 +89,46 @@ export function ArtifactDetails({ artifact }: { artifact: Artifact }) {
               </Link>
             }
           />
+          <Metric
+            label="Workload"
+            value={
+              workloadName ? (
+                agentSessionPath ? (
+                  <Link className="font-semibold text-sky-300 hover:underline" to={agentSessionPath}>
+                    {workloadName}
+                  </Link>
+                ) : (
+                  <span className="font-semibold text-slate-200">{workloadName}</span>
+                )
+              ) : (
+                "-"
+              )
+            }
+          />
+          <Metric
+            label="Agent Session"
+            value={
+              agentSessionPath && sessionId ? (
+                <Link className="font-mono text-sky-300 hover:underline" to={agentSessionPath}>
+                  {sessionId.slice(0, 8)}
+                </Link>
+              ) : (
+                "-"
+              )
+            }
+          />
+          <Metric
+            label="Run State"
+            value={
+              run.data ? (
+                <StateBadge state={run.data.status} />
+              ) : run.isLoading ? (
+                <StateBadge state="checking" />
+              ) : (
+                "-"
+              )
+            }
+          />
           <Metric label="Type" value={<span className="text-slate-300">{artifact.content_type || "-"}</span>} />
           <Metric label="Size" value={<span className="text-slate-300">{formatBytes(artifact.size_bytes)}</span>} />
           <Metric label="Created" value={<span className="text-slate-400">{formatDate(artifact.created_at)}</span>} />
@@ -129,4 +183,15 @@ export function ArtifactDetails({ artifact }: { artifact: Artifact }) {
       </div>
     </Panel>
   );
+}
+
+function metadataString(
+  metadata: Record<string, unknown>,
+  keys: string[]
+): string | undefined {
+  for (const key of keys) {
+    const value = metadata[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
 }

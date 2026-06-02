@@ -26,6 +26,7 @@ export function AgentConsole() {
   );
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedAgent = searchParams.get("agent") || "";
+  const requestedSessionId = searchParams.get("session_id") || "";
   const [agent, setAgent] = useState(() => requestedAgent);
   const [selected, setSelected] = useState<AgentSession | null>(null);
   const [message, setMessage] = useState("");
@@ -67,10 +68,20 @@ export function AgentConsole() {
   }, [agent, agents, requestedAgentKnown, setSearchParams]);
 
   useEffect(() => {
-    if (!selected && sessions.data && sessions.data.length > 0) {
+    if (!sessions.data) return;
+    if (requestedSessionId) {
+      const requestedSession = sessions.data.find(
+        (session) => session.session_id === requestedSessionId
+      );
+      if (requestedSession && selected?.session_id !== requestedSession.session_id) {
+        setSelected(requestedSession);
+        return;
+      }
+    }
+    if (!selected && sessions.data.length > 0) {
       setSelected(sessions.data[0]);
     }
-  }, [selected, sessions.data]);
+  }, [requestedSessionId, selected, sessions.data]);
 
   const history = useQuery({
     queryKey: ["history", agent, selected?.session_id],
@@ -148,6 +159,10 @@ export function AgentConsole() {
     mutationFn: () => api.createSession(agent),
     onSuccess: (session) => {
       setSelected(session);
+      setSearchParams(
+        { agent, session_id: session.session_id },
+        { replace: true }
+      );
       queryClient.invalidateQueries({ queryKey: ["sessions", agent] });
     }
   });
@@ -180,6 +195,16 @@ export function AgentConsole() {
   function submit(event: FormEvent) {
     event.preventDefault();
     if (canOperate && selected && message.trim()) send.mutate();
+  }
+
+  function selectSession(session: AgentSession) {
+    setSelected(session);
+    if (agent) {
+      setSearchParams(
+        { agent, session_id: session.session_id },
+        { replace: true }
+      );
+    }
   }
 
   return (
@@ -231,7 +256,7 @@ export function AgentConsole() {
                     ? "border-emerald-500/30 bg-emerald-500/5 text-emerald-400"
                     : "border-slate-800/80 bg-[#0e1322]/20 text-slate-300 hover:bg-slate-800/30"
                 }`}
-                onClick={() => setSelected(session)}
+                onClick={() => selectSession(session)}
               >
                 <div className="flex justify-between items-center">
                   <span className="block font-mono text-xs font-semibold">{session.session_id.slice(0, 8)}</span>

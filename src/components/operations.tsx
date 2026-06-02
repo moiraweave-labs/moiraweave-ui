@@ -235,6 +235,7 @@ export function DeploymentOperationSummary({
   operation: DeploymentOperation;
   events: DeploymentOperationEvent[];
 }) {
+  const commands = commandList(operation.metadata.log_commands);
   return (
     <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
       <div className="grid gap-2 sm:grid-cols-3">
@@ -242,6 +243,16 @@ export function DeploymentOperationSummary({
         <Metric label="Action" value={<span className="text-slate-300">{operation.action}</span>} />
         <Metric label="Status" value={<StateBadge state={operation.status} />} />
       </div>
+      {commands.length > 0 && (
+        <div className="space-y-1">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">Commands</span>
+          {commands.map((command) => (
+            <code key={command} className="block whitespace-pre-wrap rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-sky-300">
+              {command}
+            </code>
+          ))}
+        </div>
+      )}
       {events.map((event) => (
         <div key={event.id} className="rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-slate-400">
           <span className="font-semibold text-sky-300">{event.type}</span>
@@ -251,6 +262,11 @@ export function DeploymentOperationSummary({
       ))}
     </div>
   );
+}
+
+function commandList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(String).filter((item) => item.length > 0);
 }
 
 export function DeploymentsPanel({ deployments }: { deployments: Deployment[] }) {

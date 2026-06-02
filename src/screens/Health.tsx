@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCircle2, Plus, RefreshCcw, Terminal } from "lucide-react";
+import { CheckCircle2, Plus, RefreshCcw, ScrollText, Terminal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
@@ -83,6 +83,20 @@ export function Health() {
       queryClient.invalidateQueries({ queryKey: ["workload-health", workload] });
     }
   });
+  const logsOperation = useMutation({
+    mutationFn: () =>
+      api.deploymentOperation({
+        action: "logs",
+        workload_name: workload,
+        target,
+        env: planEnv,
+        metadata: { source: "moiraweave-ui" }
+      }),
+    onSuccess: (response) => {
+      setOperation(response);
+      queryClient.invalidateQueries({ queryKey: ["deployment-operations"] });
+    }
+  });
   const recordDeployment = useMutation({
     mutationFn: () =>
       api.recordDeployment(workload, {
@@ -153,6 +167,14 @@ export function Health() {
             >
               <RefreshCcw className="h-3.5 w-3.5" />
               Sync
+            </button>
+            <button
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-slate-700 disabled:text-slate-600"
+              disabled={!canOperate || !workload || logsOperation.isPending}
+              onClick={() => logsOperation.mutate()}
+            >
+              <ScrollText className="h-3.5 w-3.5" />
+              Logs
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
@@ -237,6 +259,7 @@ export function Health() {
             <OperationError error={deploymentPlan.error} fallback="Deployment plan failed. Check target and workload deployment mode." />
             <OperationError error={preflightMutation.error} fallback="Preflight failed. Check workload and role." />
             <OperationError error={syncOperation.error} fallback="Deployment sync failed. Check workload and role." />
+            <OperationError error={logsOperation.error} fallback="Log guidance failed. Check workload and role." />
             {selectedWorkloadHealth.data && (
               <WorkloadHealthSummary health={selectedWorkloadHealth.data} />
             )}

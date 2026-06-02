@@ -18,6 +18,15 @@ import {
   WorkloadHealthSummary
 } from "../components/operations";
 
+function hasStatus(body: unknown, status: string): boolean {
+  return Boolean(
+    body &&
+      typeof body === "object" &&
+      "status" in body &&
+      String((body as { status?: unknown }).status) === status
+  );
+}
+
 export function Health() {
   const queryClient = useQueryClient();
   const { canOperate, canAdmin } = useAuthProfile();
@@ -137,8 +146,16 @@ export function Health() {
   return (
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
-        <HealthTile title="System Health" ok={!health.error} body={health.data} />
-        <HealthTile title="Gateway Readiness" ok={!ready.error} body={ready.data} />
+        <HealthTile
+          title="System Health"
+          ok={health.isSuccess && hasStatus(health.data, "ok")}
+          body={health.data}
+        />
+        <HealthTile
+          title="Gateway Readiness"
+          ok={ready.isSuccess && hasStatus(ready.data, "ready")}
+          body={ready.data}
+        />
       </div>
       <Panel
         title="Operations Center"

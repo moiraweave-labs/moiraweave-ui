@@ -3,8 +3,8 @@ import { Activity, Archive, Bot, MessageSquare, Play, Plus, Send } from "lucide-
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { api } from "../api";
-import type { AgentMessage, AgentSession } from "../api";
+import { api, streamRunEvents } from "../api";
+import type { AgentMessage, AgentSession, RunEvent } from "../api";
 import { useAuthProfile } from "../auth";
 import { ChannelPills, Panel, PermissionNotice, StateBadge } from "../components/common";
 import { MessageBubble } from "../components/MessageBubble";
@@ -30,6 +30,7 @@ export function AgentConsole() {
   const [selected, setSelected] = useState<AgentSession | null>(null);
   const [message, setMessage] = useState("");
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
+  const [streamedEvents, setStreamedEvents] = useState<Record<string, RunEvent>>({});
   const queryClient = useQueryClient();
   const selectedAgent = useMemo(
     () => agents.find((item) => item.name === agent),
@@ -77,7 +78,26 @@ export function AgentConsole() {
     enabled: Boolean(agent && selected),
     refetchInterval: 2500
   });
-  const historyItems = useMemo(() => history.data || [], [history.data]);
+  const historyItems = useMemo(
+    () =>
+      (history.data || []).map((item) => {
+        if (!item.run_id || !streamedEvents[item.run_id]) return item;
+        return { ...item, latest_event: streamedEvents[item.run_id] };
+      }),
+    [history.data, streamedEvents]
+  );
+  const activeRunIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          historyItems
+            .filter((item) => item.run_id && isActiveRunStatus(item.run_status))
+            .map((item) => item.run_id as string)
+        )
+      ),
+    [historyItems]
+  );
+  const activeRunKey = activeRunIds.join("|");
   const filteredHistory = useMemo(
     () =>
       historyItems.filter((item) => {
@@ -96,6 +116,25 @@ export function AgentConsole() {
     () => historyItems.filter((item) => isActiveRunStatus(item.run_status)).length,
     [historyItems]
   );
+
+  useEffect(() => {
+    const runIds = activeRunKey ? activeRunKey.split("|") : [];
+    if (!runIds.length || !agent || !selected?.session_id) return;
+    const controllers = runIds.map((runId) =>
+      streamRunEvents(
+        runId,
+        (event) => {
+          setStreamedEvents((current) => ({ ...current, [runId]: event }));
+          queryClient.invalidateQueries({
+            queryKey: ["history", agent, selected.session_id]
+          });
+          queryClient.invalidateQueries({ queryKey: ["runs"] });
+        },
+        () => undefined
+      )
+    );
+    return () => controllers.forEach((controller) => controller.abort());
+  }, [activeRunKey, agent, queryClient, selected?.session_id]);
   const create = useMutation({
     mutationFn: () => api.createSession(agent),
     onSuccess: (session) => {

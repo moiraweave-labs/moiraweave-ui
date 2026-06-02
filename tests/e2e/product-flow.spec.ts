@@ -201,6 +201,25 @@ async function mockApi(page: Page) {
       return;
     }
 
+    if (path === "/v1/runs/run-1/events/stream" && method === "GET") {
+      await route.fulfill({
+        status: 200,
+        headers: { "content-type": "text/event-stream" },
+        body:
+          "data: " +
+          JSON.stringify({
+            id: "event-2",
+            run_id: "run-1",
+            timestamp: "2026-05-26T08:01:02+00:00",
+            type: "executor.agent.done",
+            message: "Runtime replied with artifact",
+            data: {}
+          }) +
+          "\n\n"
+      });
+      return;
+    }
+
     if (path === "/v1/artifacts" && method === "GET") {
       await json([
         {
@@ -275,7 +294,7 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
 
   await expect(page.getByText("Run Activity")).toBeVisible();
   await expect(page.getByText("1 active")).toBeVisible();
-  await expect(page.getByText("executor.agent.call").first()).toBeVisible();
+  await expect(page.getByText("executor.agent.done").first()).toBeVisible();
   await expect(page.getByText("1 artifact")).toBeVisible();
 
   await page.getByRole("link", { name: "Artifacts" }).last().click();

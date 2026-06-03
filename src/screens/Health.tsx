@@ -45,6 +45,7 @@ type ReadinessCheck = {
 };
 
 const COMMON_ENVIRONMENTS = ["local", "dev", "staging", "prod"];
+const HEALTHY_CHECK_STATES = new Set(["ok", "passed", "ready", "healthy", "present"]);
 
 function readinessChecks(body: unknown): Array<[string, ReadinessCheck]> {
   if (!body || typeof body !== "object" || !("checks" in body)) return [];
@@ -59,38 +60,74 @@ function PlatformChecks({ body }: { body: unknown }) {
   return (
     <Panel title="Platform Checks">
       <div className="divide-y divide-slate-900">
-        {checks.map(([name, check]) => (
-          <div
-            key={name}
-            className="grid gap-3 px-5 py-4 text-xs md:grid-cols-[160px_120px_1fr]"
-          >
-            <div className="font-semibold text-slate-200">{name}</div>
-            <div>
-              <StateBadge state={check.status || "unknown"} />
-            </div>
-            <div className="space-y-2 text-slate-400">
-              <div>{check.message || "No action needed."}</div>
-              <div className="flex flex-wrap gap-2 text-[10px] text-slate-500">
-                {typeof check.latency_ms === "number" && (
-                  <span className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1">
-                    {check.latency_ms} ms
-                  </span>
+        {checks.map(([name, check]) => {
+          const recommendedAction = platformCheckAction(name, check);
+          return (
+            <div
+              key={name}
+              className="grid gap-3 px-5 py-4 text-xs md:grid-cols-[160px_120px_1fr]"
+            >
+              <div className="font-semibold text-slate-200">{name}</div>
+              <div>
+                <StateBadge state={check.status || "unknown"} />
+              </div>
+              <div className="space-y-2 text-slate-400">
+                <div>{check.message || "No action needed."}</div>
+                <div className="flex flex-wrap gap-2 text-[10px] text-slate-500">
+                  {typeof check.latency_ms === "number" && (
+                    <span className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1">
+                      {check.latency_ms} ms
+                    </span>
+                  )}
+                  {Object.entries(check.metadata || {}).map(([key, value]) => (
+                    <span
+                      key={key}
+                      className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1"
+                    >
+                      {key}: {String(value)}
+                    </span>
+                  ))}
+                </div>
+                {recommendedAction && (
+                  <div className="rounded border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+                    <span className="font-semibold text-amber-200">Recommended action:</span>{" "}
+                    {recommendedAction}
+                  </div>
                 )}
-                {Object.entries(check.metadata || {}).map(([key, value]) => (
-                  <span
-                    key={key}
-                    className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1"
-                  >
-                    {key}: {String(value)}
-                  </span>
-                ))}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </Panel>
   );
+}
+
+function platformCheckAction(name: string, check: ReadinessCheck): string | null {
+  if (HEALTHY_CHECK_STATES.has(String(check.status || "").toLowerCase())) return null;
+  const normalized = name.toLowerCase();
+  if (normalized.includes("postgres") || normalized.includes("database")) {
+    return "Check DATABASE_URL, then inspect Postgres with docker compose logs postgres.";
+  }
+  if (normalized.includes("redis")) {
+    return "Check REDIS_URL, then inspect Redis with docker compose logs redis.";
+  }
+  if (normalized.includes("worker")) {
+    return "Start the worker or inspect it with docker compose logs worker. Run moira doctor if the consumer is missing.";
+  }
+  if (normalized.includes("qdrant")) {
+    return "Start Qdrant when vector storage is required, or keep it disabled for workloads that do not need it.";
+  }
+  if (normalized.includes("ui")) {
+    return "Check the UI container, VITE_API_BASE_URL, and docker compose logs ui.";
+  }
+  if (normalized.includes("api") || normalized.includes("gateway")) {
+    return "Inspect the API gateway with docker compose logs api and verify /ready.";
+  }
+  if (normalized.includes("docker") || normalized.includes("compose")) {
+    return "Verify Docker is running and regenerate local files with moira up or moira init.";
+  }
+  return "Run moira doctor, inspect the relevant service logs, and retry preflight after the dependency is healthy.";
 }
 
 export function Health() {

@@ -102,6 +102,10 @@ async function mockApi(page: Page) {
             status: "passed",
             message: "Worker consumer is attached.",
             metadata: { consumers: 1, pending: 0, lag: 0 }
+          },
+          ui: {
+            status: "warning",
+            message: "UI container status has not been confirmed."
           }
         }
       });
@@ -453,6 +457,7 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByText("Operational Snapshot")).toBeVisible();
   await expect(page.getByText("local/local", { exact: true })).toBeVisible();
   await expect(page.getByText("Platform Checks")).toBeVisible();
+  await expect(page.getByText("docker compose logs ui")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Audit Trail" })).toBeVisible();
   await expect(page.getByText("agent.message")).toBeVisible();
   await expect(page.getByText("session1").last()).toBeVisible();

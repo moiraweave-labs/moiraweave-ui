@@ -473,6 +473,8 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByRole("heading", { name: "Create Workload" })).toBeVisible();
   await expect(page.getByText("Tool Owner")).toBeVisible();
   await expect(page.getByText("egress:restricted")).toBeVisible();
+  await expect(page.getByText("Web Search: off").first()).toBeVisible();
+  await expect(page.getByText("Messaging: off").first()).toBeVisible();
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByText("Created demo-agent")).toBeVisible();
 

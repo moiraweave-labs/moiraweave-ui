@@ -332,6 +332,22 @@ function TemplateSummary({ template }: { template: WorkloadTemplate }) {
           </div>
         </div>
       )}
+      {details.runtimeCapabilities.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {details.runtimeCapabilities.map((capability) => (
+            <span
+              key={capability.label}
+              className={`rounded-md border px-2 py-1 text-[10px] font-semibold ${
+                capability.enabled
+                  ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                  : "border-slate-800 bg-slate-900/40 text-slate-500"
+              }`}
+            >
+              {capability.label}: {capability.enabled ? "runtime" : "off"}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -379,6 +395,7 @@ function templateDetails(manifest?: Record<string, unknown> | null) {
     secrets: secrets.join(", "),
     persistence: persistenceLabel,
     runtimeBoundaries: runtime.boundaryLabels.join(", "),
+    runtimeCapabilities: runtime.capabilities,
     channels,
     hasChannels: channels.exposed.length > 0 || channels.externalOwned.length > 0
   };

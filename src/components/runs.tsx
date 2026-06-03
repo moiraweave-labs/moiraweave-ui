@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   CheckCircle2,
   CircleStop,
   Clock,
@@ -10,7 +11,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { Artifact, RunEvent, RunStatus } from "../api";
-import { formatDate } from "../utils";
+import { formatDate, isActiveRunStatus } from "../utils";
 import { Metric, Panel, RowMessage, StateBadge } from "./common";
 
 export type RunMetrics = {
@@ -147,6 +148,122 @@ export function RunSummaryPanel({
   );
 }
 
+export function RunDiagnosticsPanel({
+  current,
+  events,
+  artifactCount
+}: {
+  current?: RunStatus;
+  events: RunEvent[];
+  artifactCount: number;
+}) {
+  const latestEvent = events.length > 0 ? events[events.length - 1] : undefined;
+  const diagnosis = runDiagnosis(current, latestEvent, artifactCount);
+
+  return (
+    <Panel title="Run Diagnostics">
+      <div className="space-y-4 p-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Metric label="Lifecycle" value={<StateBadge state={current?.status || "unknown"} />} />
+          <Metric label="Latest Event" value={<span className="text-xs text-slate-300">{latestEvent?.type || "-"}</span>} />
+          <Metric label="Artifacts" value={<span className="text-xs text-slate-300">{artifactCount}</span>} />
+        </div>
+        <div className={`rounded-lg border px-3 py-2 text-xs ${diagnosis.tone}`}>
+          <div className="mb-1 flex items-center gap-2 font-bold uppercase tracking-wider">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            {diagnosis.title}
+          </div>
+          <div>{diagnosis.message}</div>
+        </div>
+        {latestEvent && (
+          <div className="rounded-lg border border-slate-800 bg-[#050811] px-3 py-2 text-xs">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Latest Timeline Signal
+            </div>
+            <div className="text-slate-300">{latestEvent.message}</div>
+            <div className="mt-1 text-[10px] text-slate-500">{formatDate(latestEvent.timestamp)}</div>
+          </div>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+function runDiagnosis(
+  current: RunStatus | undefined,
+  latestEvent: RunEvent | undefined,
+  artifactCount: number
+): { title: string; message: string; tone: string } {
+  if (!current) {
+    return {
+      title: "Loading Run",
+      message: "Run state is still loading from the control plane.",
+      tone: "border-slate-800 bg-slate-900/40 text-slate-300"
+    };
+  }
+  const latestSignal = latestEvent ? ` Latest event: ${latestEvent.type}.` : "";
+  const heartbeat = current.heartbeat_at
+    ? ` Last heartbeat: ${formatDate(current.heartbeat_at)}.`
+    : "";
+  if (current.status === "queued") {
+    return {
+      title: "Waiting For Worker",
+      message: "The run is queued. Check Redis and worker consumers if it stays here longer than expected.",
+      tone: "border-amber-500/20 bg-amber-500/10 text-amber-100"
+    };
+  }
+  if (["starting", "running"].includes(current.status)) {
+    return {
+      title: "Runtime Active",
+      message: `The run is active and should keep heartbeating while work continues.${heartbeat}${latestSignal}`,
+      tone: "border-sky-500/20 bg-sky-500/10 text-sky-100"
+    };
+  }
+  if (current.status === "cancel_requested") {
+    return {
+      title: "Cancel Requested",
+      message: "MoiraWeave has recorded cancellation. The worker or adapter still needs to acknowledge it.",
+      tone: "border-amber-500/20 bg-amber-500/10 text-amber-100"
+    };
+  }
+  if (current.status === "cancelling") {
+    return {
+      title: "Cancellation In Progress",
+      message: "The adapter is attempting cooperative cancellation. Check runtime logs if this state persists.",
+      tone: "border-amber-500/20 bg-amber-500/10 text-amber-100"
+    };
+  }
+  if (current.status === "lost") {
+    return {
+      title: "Run Lost",
+      message: "Heartbeat became stale. Check worker health, runtime health, and deployment records before retrying.",
+      tone: "border-red-500/20 bg-red-500/10 text-red-200"
+    };
+  }
+  if (current.status === "failed") {
+    return {
+      title: "Run Failed",
+      message: current.error || latestEvent?.message || "Inspect timeline, payload, adapter config, and runtime logs.",
+      tone: "border-red-500/20 bg-red-500/10 text-red-200"
+    };
+  }
+  if (current.status === "canceled") {
+    return {
+      title: "Run Canceled",
+      message: "Cancellation completed. Retry the turn from Agent Console when appropriate.",
+      tone: "border-slate-700 bg-slate-900/50 text-slate-300"
+    };
+  }
+  return {
+    title: "Run Completed",
+    message:
+      artifactCount > 0
+        ? `Run succeeded and produced ${artifactCount} artifact${artifactCount === 1 ? "" : "s"}.`
+        : "Run succeeded. Inspect result JSON for the final output.",
+    tone: "border-emerald-500/20 bg-emerald-500/10 text-emerald-100"
+  };
+}
+
 export function RunEventTimeline({ events }: { events: RunEvent[] }) {
   return (
     <Panel title="Event Timeline">
@@ -163,8 +280,13 @@ export function RunEventTimeline({ events }: { events: RunEvent[] }) {
                   <span className="text-xs font-bold text-slate-300">{event.type}</span>
                   <span className="text-[10px] text-slate-500">{formatDate(event.timestamp)}</span>
                 </div>
-                <div className="text-xs text-slate-400 bg-slate-900/20 rounded-lg p-2.5 border border-slate-800/40">
-                  {event.message}
+                <div className="space-y-2 rounded-lg border border-slate-800/40 bg-slate-900/20 p-2.5 text-xs text-slate-400">
+                  <div>{event.message}</div>
+                  {Object.keys(event.data || {}).length > 0 && (
+                    <pre className="max-h-28 overflow-auto rounded border border-slate-800 bg-[#050811] p-2 font-mono text-[10px] text-emerald-400/80">
+                      {JSON.stringify(event.data, null, 2)}
+                    </pre>
+                  )}
                 </div>
               </div>
             </div>

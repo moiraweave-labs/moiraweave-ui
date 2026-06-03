@@ -7,6 +7,7 @@ import { useAuthProfile } from "../auth";
 import { ArtifactDetails } from "../components/ArtifactDetails";
 import {
   ProducedArtifactsPanel,
+  RunDiagnosticsPanel,
   RunEventTimeline,
   RunPayloadPanel,
   RunSummaryPanel
@@ -81,6 +82,11 @@ export function RunDetail() {
           current={current}
           canOperate={canOperate}
           onCancel={() => cancel.mutate()}
+        />
+        <RunDiagnosticsPanel
+          current={current}
+          events={timeline}
+          artifactCount={producedArtifacts.length}
         />
         <RunEventTimeline events={timeline} />
       </div>

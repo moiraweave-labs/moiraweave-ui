@@ -6,6 +6,7 @@ import { api } from "../api";
 import type { RunResponse } from "../api";
 import { useAuthProfile } from "../auth";
 import { SAMPLE_RUN_PAYLOAD } from "../constants";
+import { isActiveRunStatus } from "../utils";
 import {
   ErrorMessage,
   Panel,
@@ -43,7 +44,7 @@ export function Runs() {
 
   const metrics = useMemo(() => {
     const total = data.length;
-    const active = data.filter((run) => ["running", "starting"].includes(run.status)).length;
+    const active = data.filter((run) => isActiveRunStatus(run.status)).length;
     const succeeded = data.filter((run) => run.status === "succeeded").length;
     const failed = data.filter((run) => ["failed", "lost"].includes(run.status)).length;
     return { total, active, succeeded, failed };

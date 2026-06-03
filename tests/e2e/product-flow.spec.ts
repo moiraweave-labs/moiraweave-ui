@@ -290,6 +290,20 @@ async function mockApi(page: Page) {
       return;
     }
 
+    if (path === "/v1/runs/run-1/events" && method === "GET") {
+      await json([
+        {
+          id: "event-1",
+          run_id: "run-1",
+          timestamp: "2026-05-26T08:01:01+00:00",
+          type: "executor.agent.call",
+          message: "Dispatching message to agent runtime",
+          data: { adapter: "demo" }
+        }
+      ]);
+      return;
+    }
+
     if (path === "/v1/runs/run-1/events/stream" && method === "GET") {
       await route.fulfill({
         status: 200,
@@ -306,6 +320,22 @@ async function mockApi(page: Page) {
           }) +
           "\n\n"
       });
+      return;
+    }
+
+    if (path === "/v1/runs/run-1/artifacts" && method === "GET") {
+      await json([
+        {
+          id: "artifact-1",
+          run_id: "run-1",
+          name: "demo-reply.json",
+          uri: "local://demo-reply.json",
+          content_type: "application/json",
+          size_bytes: 48,
+          created_at: "2026-05-26T08:01:03+00:00",
+          metadata: { source: "demo-agent", session_id: "session1" }
+        }
+      ]);
       return;
     }
 
@@ -389,6 +419,15 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByText("executor.agent.done").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Inspect" })).toBeVisible();
   await expect(page.getByText("1 artifact")).toBeVisible();
+
+  await page.getByRole("link", { name: "Open Run" }).click();
+  await expect(page).toHaveURL(/\/runs\/run-1/);
+  await expect(page.getByRole("heading", { name: "Run Diagnostics" })).toBeVisible();
+  await expect(page.getByText("Runtime Active")).toBeVisible();
+  await expect(page.getByText("Latest Timeline Signal")).toBeVisible();
+  await expect(page.getByText('"adapter": "demo"')).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("heading", { name: "Chat Session: session1" })).toBeVisible();
 
   await page.getByRole("link", { name: "Artifacts" }).last().click();
   await expect(page).toHaveURL(/\/artifacts\?run_id=run-1/);

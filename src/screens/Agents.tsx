@@ -4,6 +4,7 @@ import {
   Archive,
   Bot,
   CircleStop,
+  ShieldCheck,
   MessageSquare,
   Play,
   Plus,
@@ -20,6 +21,7 @@ import { ChannelPills, Panel, PermissionNotice, StateBadge } from "../components
 import { MessageBubble } from "../components/MessageBubble";
 import {
   agentChannels,
+  agentRuntimeSummary,
   formatDate,
   isActiveRunStatus,
   isAttentionRunStatus
@@ -53,6 +55,10 @@ export function AgentConsole() {
   );
   const channels = useMemo(
     () => agentChannels(selectedAgent?.manifest),
+    [selectedAgent]
+  );
+  const runtime = useMemo(
+    () => agentRuntimeSummary(selectedAgent?.manifest),
     [selectedAgent]
   );
 
@@ -328,6 +334,13 @@ export function AgentConsole() {
               <ChannelPills channels={channels.externalOwned} empty="None" tone="amber" />
             </div>
           </div>
+
+          {selectedAgent && (
+            <AgentRuntimeBoundarySummary
+              externalChannels={channels.externalOwned}
+              runtime={runtime}
+            />
+          )}
         </div>
       </Panel>
 
@@ -434,6 +447,74 @@ export function AgentConsole() {
           </form>
         </div>
       </Panel>
+    </div>
+  );
+}
+
+function AgentRuntimeBoundarySummary({
+  externalChannels,
+  runtime
+}: {
+  externalChannels: string[];
+  runtime: ReturnType<typeof agentRuntimeSummary>;
+}) {
+  return (
+    <div className="space-y-3 border-t border-slate-800 pt-4">
+      <div className="flex items-center gap-2">
+        <ShieldCheck className="h-4 w-4 text-sky-400" />
+        <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          Runtime Boundary
+        </span>
+      </div>
+      <div className="grid gap-2">
+        {runtime.fields.map((field) => (
+          <div
+            key={field.label}
+            className="flex items-center justify-between gap-3 rounded-lg border border-slate-800 bg-[#090d16]/60 px-3 py-2"
+          >
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              {field.label}
+            </span>
+            <span className="min-w-0 break-words text-right font-mono text-[11px] text-slate-300">
+              {field.value}
+            </span>
+          </div>
+        ))}
+      </div>
+      {runtime.boundaryLabels.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {runtime.boundaryLabels.map((label) => (
+            <span
+              key={label}
+              className="rounded-md border border-sky-500/20 bg-sky-500/10 px-2 py-1 font-mono text-[10px] font-semibold text-sky-300"
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex flex-wrap gap-1.5">
+        {runtime.capabilities.map((capability) => (
+          <span
+            key={capability.label}
+            className={`rounded-md border px-2 py-1 text-[10px] font-semibold ${
+              capability.enabled
+                ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
+                : "border-slate-800 bg-slate-900/40 text-slate-500"
+            }`}
+          >
+            {capability.label}: {capability.enabled ? "runtime" : "off"}
+          </span>
+        ))}
+      </div>
+      {externalChannels.length > 0 && (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-100">
+          <span className="font-semibold text-amber-200">External-owned channels:</span>{" "}
+          {externalChannels.join(", ")} stay in the agent runtime. MoiraWeave
+          supervises health, runs, and artifacts through the adapter when the
+          runtime exposes them.
+        </div>
+      )}
     </div>
   );
 }

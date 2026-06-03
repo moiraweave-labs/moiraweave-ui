@@ -14,7 +14,12 @@ import {
   RowMessage,
   WorkloadHealthBadge
 } from "../components/common";
-import { agentAdapter, agentChannels, stringList } from "../utils";
+import {
+  agentAdapter,
+  agentChannels,
+  agentRuntimeSummary,
+  stringList
+} from "../utils";
 
 export function Workloads() {
   const queryClient = useQueryClient();
@@ -345,6 +350,7 @@ function TemplateDetail({ label, value }: { label: string; value: string }) {
 function templateDetails(manifest?: Record<string, unknown> | null) {
   const spec = objectValue(manifest?.spec);
   const agent = objectValue(spec.agent);
+  const runtime = agentRuntimeSummary(manifest || undefined);
   const ports = Array.isArray(spec.ports)
     ? spec.ports
         .map((item) => {
@@ -361,40 +367,18 @@ function templateDetails(manifest?: Record<string, unknown> | null) {
   ].filter((secret, index, all) => all.indexOf(secret) === index);
   const persistence = objectValue(spec.persistence);
   const channels = agentChannels(manifest || undefined);
-  const runtimeRequirements = objectValue(agent.runtimeRequirements);
-  const filesystem = objectValue(runtimeRequirements.filesystem);
-  const network = objectValue(runtimeRequirements.network);
-  const webSearch = objectValue(runtimeRequirements.webSearch);
-  const browser = objectValue(runtimeRequirements.browser);
-  const terminal = objectValue(runtimeRequirements.terminal);
-  const mcp = objectValue(runtimeRequirements.mcp);
-  const messaging = objectValue(runtimeRequirements.messaging);
   const persistenceLabel =
     persistence.enabled === true
       ? String(persistence.mountPath || "enabled")
       : "";
-  const runtimeBoundaries = [
-    network.egress ? `egress:${String(network.egress)}` : "",
-    filesystem.persistentWorkspace === true ? "workspace:persistent" : "",
-    webSearch.enabled === true ? "web-search" : "",
-    typeof browser.mode === "string" && browser.mode !== "none"
-      ? `browser:${browser.mode}`
-      : "",
-    typeof terminal.mode === "string" && terminal.mode !== "none"
-      ? `terminal:${terminal.mode}`
-      : "",
-    mcp.enabled === true ? "mcp" : "",
-    messaging.enabled === true ? "messaging" : ""
-  ].filter(Boolean);
 
   return {
     adapter: typeof agent.adapter === "string" ? agent.adapter : "",
-    toolOwnership:
-      typeof agent.toolOwnership === "string" ? agent.toolOwnership : "runtime",
+    toolOwnership: runtime.toolOwnership,
     ports,
     secrets: secrets.join(", "),
     persistence: persistenceLabel,
-    runtimeBoundaries: runtimeBoundaries.join(", "),
+    runtimeBoundaries: runtime.boundaryLabels.join(", "),
     channels,
     hasChannels: channels.exposed.length > 0 || channels.externalOwned.length > 0
   };

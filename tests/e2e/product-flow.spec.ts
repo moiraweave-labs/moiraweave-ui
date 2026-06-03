@@ -420,6 +420,10 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await page.getByRole("link", { name: "Open agent console" }).click();
   await expect(page).toHaveURL(/\/agents\?agent=demo-agent/);
   await expect(page.getByText("No sessions yet")).toBeVisible();
+  await expect(page.getByText("Runtime Boundary")).toBeVisible();
+  await expect(page.getByText("egress:restricted")).toBeVisible();
+  await expect(page.getByText("External-owned channels:")).toBeVisible();
+  await expect(page.getByText("telegram stay in the agent runtime")).toBeVisible();
 
   await page.getByRole("button", { name: "Start session" }).first().click();
   await expect(page.getByRole("heading", { name: "Chat Session: session1" })).toBeVisible();

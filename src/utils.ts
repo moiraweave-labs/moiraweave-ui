@@ -79,6 +79,82 @@ export function agentChannels(manifest?: Record<string, unknown>): {
   };
 }
 
+export type AgentRuntimeSummary = {
+  toolOwnership: string;
+  boundaryLabels: string[];
+  fields: Array<{ label: string; value: string }>;
+  capabilities: Array<{ label: string; enabled: boolean }>;
+};
+
+export function agentRuntimeSummary(
+  manifest?: Record<string, unknown>
+): AgentRuntimeSummary {
+  const spec = objectValue(manifest?.spec);
+  const agent = objectValue(spec.agent);
+  const requirements = objectValue(agent.runtimeRequirements);
+  const filesystem = objectValue(requirements.filesystem);
+  const network = objectValue(requirements.network);
+  const webSearch = objectValue(requirements.webSearch);
+  const browser = objectValue(requirements.browser);
+  const terminal = objectValue(requirements.terminal);
+  const mcp = objectValue(requirements.mcp);
+  const messaging = objectValue(requirements.messaging);
+
+  const toolOwnership =
+    typeof agent.toolOwnership === "string" ? agent.toolOwnership : "runtime";
+  const networkEgress =
+    typeof network.egress === "string" ? network.egress : "restricted";
+  const workspaceMount =
+    typeof filesystem.workspaceMount === "string"
+      ? filesystem.workspaceMount
+      : typeof agent.workspaceMount === "string"
+        ? agent.workspaceMount
+        : "";
+  const browserMode = typeof browser.mode === "string" ? browser.mode : "none";
+  const terminalMode =
+    typeof terminal.mode === "string" ? terminal.mode : "none";
+  const terminalApproval =
+    typeof terminal.approval === "string" ? terminal.approval : "runtime";
+  const persistentWorkspace = filesystem.persistentWorkspace === true;
+  const boundaryLabels = [
+    networkEgress ? `egress:${networkEgress}` : "",
+    persistentWorkspace ? "workspace:persistent" : "",
+    webSearch.enabled === true ? "web-search" : "",
+    browserMode !== "none" ? `browser:${browserMode}` : "",
+    terminalMode !== "none" ? `terminal:${terminalMode}` : "",
+    mcp.enabled === true ? "mcp" : "",
+    messaging.enabled === true ? "messaging" : ""
+  ].filter(Boolean);
+
+  return {
+    toolOwnership,
+    boundaryLabels,
+    fields: [
+      { label: "Tool Owner", value: toolOwnership },
+      { label: "Network", value: networkEgress },
+      {
+        label: "Workspace",
+        value: persistentWorkspace
+          ? `persistent${workspaceMount ? ` at ${workspaceMount}` : ""}`
+          : "ephemeral"
+      },
+      { label: "Browser", value: browserMode },
+      {
+        label: "Terminal",
+        value:
+          terminalMode === "none"
+            ? "none"
+            : `${terminalMode} approval:${terminalApproval}`
+      }
+    ],
+    capabilities: [
+      { label: "Web Search", enabled: webSearch.enabled === true },
+      { label: "MCP", enabled: mcp.enabled === true },
+      { label: "Messaging", enabled: messaging.enabled === true }
+    ]
+  };
+}
+
 export function stringList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -110,4 +186,10 @@ export function formatBytes(value?: number | null): string {
     amount /= 1024;
   }
   return `${amount.toFixed(0)} PB`;
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }

@@ -31,7 +31,16 @@ export function formatError(error: unknown, fallback: string): string {
 export function mergeEvents(stored: RunEvent[], streamed: RunEvent[]): RunEvent[] {
   const events = new Map<string, RunEvent>();
   for (const event of [...stored, ...streamed]) events.set(event.id, event);
-  return [...events.values()].sort((a, b) => Number(a.id) - Number(b.id));
+  return [...events.values()].sort((a, b) => {
+    const timestampDiff = eventTimestamp(a) - eventTimestamp(b);
+    if (timestampDiff !== 0) return timestampDiff;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function eventTimestamp(event: RunEvent): number {
+  const timestamp = Date.parse(event.timestamp);
+  return Number.isNaN(timestamp) ? 0 : timestamp;
 }
 
 export function isActiveRunStatus(status?: string | null): boolean {

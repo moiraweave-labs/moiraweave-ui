@@ -431,7 +431,8 @@ export const api = {
 export function streamRunEvents(
   runId: string,
   onEvent: (event: RunEvent) => void,
-  onError?: (error: unknown) => void
+  onError?: (error: unknown) => void,
+  onOpen?: () => void
 ): AbortController {
   const controller = new AbortController();
   const token = getToken();
@@ -444,6 +445,7 @@ export function streamRunEvents(
   })
     .then(async (response) => {
       if (!response.ok || !response.body) throw new Error(response.statusText);
+      onOpen?.();
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";

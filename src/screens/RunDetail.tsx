@@ -9,8 +9,10 @@ import {
   ProducedArtifactsPanel,
   RunDiagnosticsPanel,
   RunEventTimeline,
+  RunLiveEventsPanel,
   RunPayloadPanel,
-  RunSummaryPanel
+  RunSummaryPanel,
+  type RunStreamStatus
 } from "../components/runs";
 import { mergeEvents } from "../utils";
 
@@ -19,6 +21,10 @@ export function RunDetail() {
   const queryClient = useQueryClient();
   const { canOperate } = useAuthProfile();
   const [streamedEvents, setStreamedEvents] = useState<RunEvent[]>([]);
+  const [streamStatus, setStreamStatus] = useState<RunStreamStatus>({
+    status: "connecting",
+    message: "Opening live event stream..."
+  });
   const [selectedArtifactId, setSelectedArtifactId] = useState<string | null>(null);
 
   const run = useQuery({
@@ -45,11 +51,39 @@ export function RunDetail() {
   useEffect(() => {
     if (!runId) return undefined;
     setStreamedEvents([]);
-    const controller = streamRunEvents(runId, (event) => {
-      setStreamedEvents((current) =>
-        current.some((item) => item.id === event.id) ? current : [...current, event]
-      );
+    setStreamStatus({
+      status: "connecting",
+      message: "Opening live event stream..."
     });
+    const controller = streamRunEvents(
+      runId,
+      (event) => {
+        setStreamedEvents((current) =>
+          current.some((item) => item.id === event.id) ? current : [...current, event]
+        );
+        setStreamStatus({
+          status: "live",
+          message: "Receiving live runtime events from the API gateway.",
+          lastEventAt: event.timestamp
+        });
+      },
+      (error) => {
+        setStreamStatus({
+          status: "degraded",
+          message: streamErrorMessage(error)
+        });
+      },
+      () => {
+        setStreamStatus((currentStatus) =>
+          currentStatus.status === "connecting"
+            ? {
+                status: "connected",
+                message: "Live stream connected. Waiting for new runtime events."
+              }
+            : currentStatus
+        );
+      }
+    );
     return () => controller.abort();
   }, [runId]);
 
@@ -88,6 +122,11 @@ export function RunDetail() {
           events={timeline}
           artifactCount={producedArtifacts.length}
         />
+        <RunLiveEventsPanel
+          stream={streamStatus}
+          storedCount={events.data?.length || 0}
+          streamedCount={streamedEvents.length}
+        />
         <RunEventTimeline events={timeline} />
       </div>
 
@@ -106,4 +145,11 @@ export function RunDetail() {
       </div>
     </div>
   );
+}
+
+function streamErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return `Live event stream degraded: ${error.message}. Persisted events still refresh from the API.`;
+  }
+  return "Live event stream degraded. Persisted events still refresh from the API.";
 }

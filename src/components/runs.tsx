@@ -21,6 +21,12 @@ export type RunMetrics = {
   failed: number;
 };
 
+export type RunStreamStatus = {
+  status: "connecting" | "connected" | "live" | "degraded";
+  message: string;
+  lastEventAt?: string | null;
+};
+
 export function RunsMetrics({ metrics }: { metrics: RunMetrics }) {
   return (
     <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
@@ -187,6 +193,43 @@ export function RunDiagnosticsPanel({
       </div>
     </Panel>
   );
+}
+
+export function RunLiveEventsPanel({
+  stream,
+  storedCount,
+  streamedCount
+}: {
+  stream: RunStreamStatus;
+  storedCount: number;
+  streamedCount: number;
+}) {
+  return (
+    <Panel title="Live Event Feed">
+      <div className="space-y-4 p-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Metric label="Stream" value={<StateBadge state={stream.status} />} />
+          <Metric label="Persisted Events" value={<span className="text-xs text-slate-300">{storedCount}</span>} />
+          <Metric label="Live Events" value={<span className="text-xs text-slate-300">{streamedCount}</span>} />
+        </div>
+        <div className={`rounded-lg border px-3 py-2 text-xs ${streamTone(stream.status)}`}>
+          <div className="font-semibold text-slate-100">{stream.message}</div>
+          {stream.lastEventAt && (
+            <div className="mt-1 text-[10px] text-slate-400">
+              Last live event: {formatDate(stream.lastEventAt)}
+            </div>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function streamTone(status: RunStreamStatus["status"]): string {
+  if (status === "degraded") return "border-red-500/20 bg-red-500/10 text-red-200";
+  if (status === "live") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-100";
+  if (status === "connected") return "border-sky-500/20 bg-sky-500/10 text-sky-100";
+  return "border-amber-500/20 bg-amber-500/10 text-amber-100";
 }
 
 function runDiagnosis(

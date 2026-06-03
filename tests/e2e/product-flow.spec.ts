@@ -425,6 +425,9 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByRole("heading", { name: "Run Diagnostics" })).toBeVisible();
   await expect(page.getByText("Runtime Active")).toBeVisible();
   await expect(page.getByText("Latest Timeline Signal")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Live Event Feed" })).toBeVisible();
+  await expect(page.getByText("Receiving live runtime events from the API gateway.")).toBeVisible();
+  await expect(page.getByText("Runtime replied with artifact").first()).toBeVisible();
   await expect(page.getByText('"adapter": "demo"')).toBeVisible();
   await page.goBack();
   await expect(page.getByRole("heading", { name: "Chat Session: session1" })).toBeVisible();

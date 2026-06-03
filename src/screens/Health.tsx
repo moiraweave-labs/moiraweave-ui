@@ -130,6 +130,32 @@ function platformCheckAction(name: string, check: ReadinessCheck): string | null
   return "Run moira doctor, inspect the relevant service logs, and retry preflight after the dependency is healthy.";
 }
 
+function deploymentPlanFromOperation(operation: DeploymentOperation): DeploymentPlan | null {
+  const plan = operation.metadata.plan;
+  if (!plan || typeof plan !== "object") return null;
+  const candidate = plan as Partial<DeploymentPlan>;
+  if (
+    typeof candidate.workload_name !== "string" ||
+    typeof candidate.target !== "string" ||
+    typeof candidate.mode !== "string" ||
+    !Array.isArray(candidate.files) ||
+    !Array.isArray(candidate.commands) ||
+    !Array.isArray(candidate.notes)
+  ) {
+    return null;
+  }
+  return {
+    workload_name: candidate.workload_name,
+    target: candidate.target,
+    mode: candidate.mode,
+    service_name: candidate.service_name ?? null,
+    endpoint: candidate.endpoint ?? null,
+    files: candidate.files.map(String),
+    commands: candidate.commands.map(String),
+    notes: candidate.notes.map(String)
+  };
+}
+
 export function Health() {
   const queryClient = useQueryClient();
   const { canOperate, canAdmin } = useAuthProfile();
@@ -203,9 +229,21 @@ export function Health() {
     mutationFn: () => api.preflight(workload, target, planEnv),
     onSuccess: (response) => setPreflight(response)
   });
-  const deploymentPlan = useMutation({
-    mutationFn: () => api.deploymentPlan(workload, target, planEnv),
-    onSuccess: (response) => setPlan(response)
+  const planOperation = useMutation({
+    mutationFn: () =>
+      api.deploymentOperation({
+        action: "plan",
+        workload_name: workload,
+        target,
+        env: planEnv,
+        metadata: { source: "moiraweave-ui" }
+      }),
+    onSuccess: (response) => {
+      setOperation(response);
+      setPlan(deploymentPlanFromOperation(response));
+      queryClient.invalidateQueries({ queryKey: ["deployment-operations"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-events"] });
+    }
   });
   const syncOperation = useMutation({
     mutationFn: () =>
@@ -343,8 +381,8 @@ export function Health() {
             </button>
             <button
               className="inline-flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-200 transition-all hover:bg-slate-700 disabled:text-slate-600"
-              disabled={!workload || deploymentPlan.isPending}
-              onClick={() => deploymentPlan.mutate()}
+              disabled={!canOperate || !workload || planOperation.isPending}
+              onClick={() => planOperation.mutate()}
             >
               <Terminal className="h-3.5 w-3.5" />
               Plan
@@ -487,7 +525,7 @@ export function Health() {
               preflight={preflight}
             />
             <OperationError error={recordDeployment.error} fallback="Deployment record failed. Check JSON and endpoint." />
-            <OperationError error={deploymentPlan.error} fallback="Deployment plan failed. Check target and workload deployment mode." />
+            <OperationError error={planOperation.error} fallback="Deployment plan failed. Check target and workload deployment mode." />
             <OperationError error={preflightMutation.error} fallback="Preflight failed. Check workload and role." />
             <OperationError error={syncOperation.error} fallback="Deployment sync failed. Check workload and role." />
             <OperationError error={logsOperation.error} fallback="Log guidance failed. Check workload and role." />

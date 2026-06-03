@@ -48,6 +48,8 @@ async function mockApi(page: Page) {
     created_at: string;
   }> = [];
   const history: Array<Record<string, unknown>> = [];
+  const deploymentOperations: Array<Record<string, unknown>> = [];
+  const deploymentOperationEvents: Record<string, Array<Record<string, unknown>>> = {};
 
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -165,7 +167,60 @@ async function mockApi(page: Page) {
     }
 
     if (path === "/v1/deployment-operations" && method === "GET") {
-      await json([]);
+      await json(deploymentOperations);
+      return;
+    }
+
+    if (path === "/v1/deployment-operations" && method === "POST") {
+      const payload = await request.postDataJSON();
+      const operationId = `operation-${deploymentOperations.length + 1}`;
+      const plan = {
+        workload_name: payload.workload_name,
+        target: payload.target || "local",
+        mode: "managed",
+        service_name: payload.workload_name,
+        endpoint: `http://${payload.workload_name}:8000`,
+        files: [".moiraweave/deploy/docker-compose.workloads.yml"],
+        commands: [
+          "docker compose -f docker-compose.yml -f .moiraweave/deploy/docker-compose.workloads.yml up -d"
+        ],
+        notes: ["Run moira up for local execution."]
+      };
+      const operation = {
+        operation_id: operationId,
+        action: payload.action,
+        workload_name: payload.workload_name,
+        target: payload.target || "local",
+        env: payload.env || "local",
+        status: "succeeded",
+        user: "admin",
+        created_at: "2026-05-26T08:02:00+00:00",
+        updated_at: "2026-05-26T08:02:00+00:00",
+        completed_at: "2026-05-26T08:02:00+00:00",
+        metadata: { plan }
+      };
+      deploymentOperations.unshift(operation);
+      deploymentOperationEvents[operationId] = [
+        {
+          id: "event-plan-1",
+          operation_id: operationId,
+          timestamp: "2026-05-26T08:02:00+00:00",
+          type: "operation.plan",
+          message: "Deployment plan generated.",
+          data: { plan }
+        }
+      ];
+      await json(operation, 202);
+      return;
+    }
+
+    if (
+      path.startsWith("/v1/deployment-operations/") &&
+      path.endsWith("/events") &&
+      method === "GET"
+    ) {
+      const operationId = path.split("/")[3];
+      await json(deploymentOperationEvents[operationId] || []);
       return;
     }
 
@@ -480,6 +535,15 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByText("local/local", { exact: true })).toBeVisible();
   await expect(page.getByText("Platform Checks")).toBeVisible();
   await expect(page.getByText("docker compose logs ui")).toBeVisible();
+  await page.getByRole("button", { name: "Plan" }).click();
+  await expect(page.getByText("operation.plan")).toBeVisible();
+  await expect(page.getByText("Deployment plan generated.")).toBeVisible();
+  await expect(
+    page.getByText(".moiraweave/deploy/docker-compose.workloads.yml", {
+      exact: true
+    })
+  ).toBeVisible();
+  await expect(page.getByText("Run moira up for local execution.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Audit Trail" })).toBeVisible();
   await expect(page.getByText("agent.message")).toBeVisible();
   await expect(page.getByText("session1").last()).toBeVisible();

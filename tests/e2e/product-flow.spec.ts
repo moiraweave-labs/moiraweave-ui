@@ -23,6 +23,15 @@ const demoWorkload: Workload = {
       execution: { mode: "session" },
       agent: {
         adapter: "generic-http",
+        toolOwnership: "runtime",
+        runtimeRequirements: {
+          filesystem: { persistentWorkspace: false },
+          network: { egress: "restricted" },
+          webSearch: { enabled: false },
+          browser: { mode: "none" },
+          terminal: { mode: "none" },
+          messaging: { enabled: false }
+        },
         exposedChannels: ["ui", "api"],
         externalOwnedChannels: ["telegram"]
       }
@@ -403,6 +412,8 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
 
   await expect(page.getByText("admin").first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Create Workload" })).toBeVisible();
+  await expect(page.getByText("Tool Owner")).toBeVisible();
+  await expect(page.getByText("egress:restricted")).toBeVisible();
   await page.getByRole("button", { name: "Create" }).click();
   await expect(page.getByText("Created demo-agent")).toBeVisible();
 

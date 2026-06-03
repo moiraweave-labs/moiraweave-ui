@@ -250,7 +250,8 @@ const PREFLIGHT_CHECK_LABELS: Record<string, string> = {
   postgres: "Postgres",
   redis: "Redis",
   worker_dispatch: "Worker Dispatch",
-  runtime_reachability: "Runtime Reachability"
+  runtime_reachability: "Runtime Reachability",
+  runtime_boundaries: "Runtime Boundaries"
 };
 
 function preflightCheckLabel(name: string): string {
@@ -295,6 +296,17 @@ function preflightMetadataEntries(check: PreflightCheck): Array<[string, string]
       ["env", scalarValue(metadata.env)],
       ["status", scalarValue(metadata.status)],
       ["endpoint", scalarValue(metadata.endpoint)]
+    ].filter((entry): entry is [string, string] => Boolean(entry[1]));
+  }
+  if (check.name === "runtime_boundaries") {
+    return [
+      ["owner", scalarValue(metadata.toolOwnership)],
+      ["egress", scalarValue(metadata.networkEgress)],
+      ["workspace", scalarValue(metadata.workspaceMount)],
+      ["browser", scalarValue(metadata.browserMode)],
+      ["terminal", scalarValue(metadata.terminalMode)],
+      ["channels", listValue(metadata.exposedChannels)],
+      ["external", listValue(metadata.externalOwnedChannels)]
     ].filter((entry): entry is [string, string] => Boolean(entry[1]));
   }
   return [];

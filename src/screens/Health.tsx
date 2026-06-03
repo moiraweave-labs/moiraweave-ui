@@ -22,6 +22,7 @@ import {
   DeploymentPlanSummary,
   DeploymentsPanel,
   OperationError,
+  OperationsSnapshot,
   PreflightSummary,
   SecretInventorySummary,
   WorkloadHealthSummary
@@ -42,6 +43,8 @@ type ReadinessCheck = {
   latency_ms?: number | null;
   metadata?: Record<string, unknown>;
 };
+
+const COMMON_ENVIRONMENTS = ["local", "dev", "staging", "prod"];
 
 function readinessChecks(body: unknown): Array<[string, ReadinessCheck]> {
   if (!body || typeof body !== "object" || !("checks" in body)) return [];
@@ -244,6 +247,12 @@ export function Health() {
       queryClient.invalidateQueries({ queryKey: ["audit-events"] });
     }
   });
+  const currentDeployment = (deployments.data || []).find(
+    (deployment) =>
+      deployment.workload_name === workload &&
+      deployment.target === target &&
+      deployment.env === planEnv
+  );
 
   useEffect(() => {
     setPlan(null);
@@ -382,11 +391,29 @@ export function Health() {
             </div>
             <div>
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Env</label>
+              <div className="grid grid-cols-4 gap-1 rounded-lg border border-slate-800 bg-[#050811] p-1">
+                {COMMON_ENVIRONMENTS.map((envName) => (
+                  <button
+                    key={envName}
+                    type="button"
+                    aria-pressed={planEnv === envName}
+                    className={`rounded-md px-2 py-1.5 text-[10px] font-semibold transition-colors ${
+                      planEnv === envName
+                        ? "bg-emerald-500/20 text-emerald-200"
+                        : "text-slate-500 hover:bg-slate-800/60 hover:text-slate-200"
+                    }`}
+                    onClick={() => setPlanEnv(envName)}
+                  >
+                    {envName}
+                  </button>
+                ))}
+              </div>
               <input
-                className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                aria-label="Custom environment"
+                className="mt-2 w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
                 value={planEnv}
                 onChange={(event) => setPlanEnv(event.target.value)}
-                placeholder="dev"
+                placeholder="custom-env"
               />
             </div>
             <div>
@@ -414,6 +441,14 @@ export function Health() {
                 placeholder="http://service:port"
               />
             </div>
+            <OperationsSnapshot
+              workloadName={workload}
+              target={target}
+              env={planEnv}
+              deployment={currentDeployment}
+              health={selectedWorkloadHealth.data}
+              preflight={preflight}
+            />
             <OperationError error={recordDeployment.error} fallback="Deployment record failed. Check JSON and endpoint." />
             <OperationError error={deploymentPlan.error} fallback="Deployment plan failed. Check target and workload deployment mode." />
             <OperationError error={preflightMutation.error} fallback="Preflight failed. Check workload and role." />

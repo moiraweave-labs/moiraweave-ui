@@ -80,6 +80,132 @@ export function SecretInventorySummary({
   );
 }
 
+export function OperationsSnapshot({
+  workloadName,
+  target,
+  env,
+  deployment,
+  health,
+  preflight
+}: {
+  workloadName: string;
+  target: string;
+  env: string;
+  deployment?: Deployment;
+  health?: WorkloadHealth;
+  preflight?: PreflightResponse | null;
+}) {
+  const deploymentRecord = preflight?.checks.find((check) => check.name === "deployment_record");
+  const reachability = preflight?.checks.find((check) => check.name === "runtime_reachability");
+  const firstBlockedCheck = preflight?.checks.find((check) => check.status !== "passed");
+  const nextAction = operationNextAction({
+    workloadName,
+    target,
+    env,
+    deployment,
+    health,
+    preflight,
+    firstBlockedCheck
+  });
+
+  const items = [
+    {
+      label: "Created",
+      state: workloadName ? "created" : "missing",
+      detail: workloadName || "No workload selected"
+    },
+    {
+      label: "Deployed",
+      state: deployment?.status || deploymentRecord?.status || "missing",
+      detail: deployment
+        ? `${deployment.target}/${deployment.env}`
+        : `No ${target}/${env} record`
+    },
+    {
+      label: "Reachable",
+      state: reachability?.status || (deployment?.endpoint ? "unknown" : "not_checked"),
+      detail: reachability?.message || deployment?.endpoint || "Run preflight"
+    },
+    {
+      label: "Healthy",
+      state: health?.status || "unknown",
+      detail: health?.reason || "Health has not been loaded yet"
+    }
+  ];
+
+  return (
+    <div className="space-y-3 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Operational Snapshot
+          </div>
+          <div className="mt-1 font-mono text-[10px] text-slate-500">
+            {target}/{env || "unset"}
+          </div>
+        </div>
+        <StateBadge state={preflight?.status || health?.status || "unknown"} />
+      </div>
+      <div className="grid gap-2 sm:grid-cols-4">
+        {items.map((item) => (
+          <div key={item.label} className="min-w-0 rounded border border-slate-800 bg-[#050811] p-2">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                {item.label}
+              </span>
+              <StateBadge state={item.state} />
+            </div>
+            <div className="truncate text-[11px] text-slate-300" title={item.detail}>
+              {item.detail}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="rounded border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-[11px] text-sky-100">
+        {nextAction}
+      </div>
+    </div>
+  );
+}
+
+function operationNextAction({
+  workloadName,
+  target,
+  env,
+  deployment,
+  health,
+  preflight,
+  firstBlockedCheck
+}: {
+  workloadName: string;
+  target: string;
+  env: string;
+  deployment?: Deployment;
+  health?: WorkloadHealth;
+  preflight?: PreflightResponse | null;
+  firstBlockedCheck?: PreflightCheck;
+}): string {
+  if (!workloadName) {
+    return "Select a workload to inspect deployment state.";
+  }
+  if (!deployment) {
+    return `Deploy or connect the runtime, then sync a ${target}/${env} deployment record.`;
+  }
+  if (firstBlockedCheck) {
+    return firstBlockedCheck.remediation || firstBlockedCheck.message;
+  }
+  if (preflight && preflight.status !== "passed" && preflight.recommendations.length > 0) {
+    return preflight.recommendations[0];
+  }
+  if (health && health.status !== "healthy" && health.recommendations.length > 0) {
+    return health.recommendations[0];
+  }
+  if (!preflight) {
+    return "Run preflight to verify secrets, worker dispatch, deployment records, and runtime reachability.";
+  }
+  return "No blocking action detected for the selected environment.";
+}
+
 export function PreflightSummary({ preflight }: { preflight: PreflightResponse }) {
   return (
     <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
@@ -166,6 +292,7 @@ function preflightMetadataEntries(check: PreflightCheck): Array<[string, string]
   if (check.name === "deployment_record") {
     return [
       ["target", scalarValue(metadata.target)],
+      ["env", scalarValue(metadata.env)],
       ["status", scalarValue(metadata.status)],
       ["endpoint", scalarValue(metadata.endpoint)]
     ].filter((entry): entry is [string, string] => Boolean(entry[1]));

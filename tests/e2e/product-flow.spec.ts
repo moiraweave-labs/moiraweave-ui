@@ -406,6 +406,8 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
 
   await page.goto("/operations?workload=demo-agent");
   await expect(page.getByRole("heading", { name: "Operations Center" })).toBeVisible();
+  await expect(page.getByText("Operational Snapshot")).toBeVisible();
+  await expect(page.getByText("local/local", { exact: true })).toBeVisible();
   await expect(page.getByText("Platform Checks")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Audit Trail" })).toBeVisible();
   await expect(page.getByText("agent.message")).toBeVisible();

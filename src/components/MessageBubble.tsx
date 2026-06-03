@@ -1,4 +1,4 @@
-import { Archive, Bot, CircleStop, Cpu, RefreshCcw } from "lucide-react";
+import { Activity, Archive, Bot, CircleStop, Cpu, RefreshCcw } from "lucide-react";
 import { Link } from "react-router-dom";
 import type { AgentMessage } from "../api";
 import { isActiveRunStatus } from "../utils";
@@ -6,15 +6,24 @@ import { StateBadge } from "./common";
 
 export function MessageBubble({
   message,
+  selected,
   onCancel,
+  onInspect,
   onRetry
 }: {
   message: AgentMessage;
+  selected?: boolean;
   onCancel?: (runId: string) => void;
+  onInspect?: (message: AgentMessage) => void;
   onRetry?: (text: string) => void;
 }) {
   const isUser = message.role === "user";
   const canCancel = Boolean(message.run_id) && isActiveRunStatus(message.run_status);
+  const selectedClass = selected
+    ? isUser
+      ? "ring-2 ring-white/30"
+      : "ring-2 ring-emerald-500/30"
+    : "";
   return (
     <div className={`flex gap-3.5 ${isUser ? "justify-end" : "justify-start"}`}>
       {!isUser && (
@@ -27,7 +36,7 @@ export function MessageBubble({
           isUser
             ? "bg-gradient-to-tr from-emerald-500 to-teal-500 text-white font-medium rounded-tr-none"
             : "border border-slate-800/80 bg-[#0e1322]/80 text-slate-300 rounded-tl-none"
-        }`}
+        } ${selectedClass}`}
       >
         <div className="mb-1 text-[9px] font-bold uppercase tracking-wider opacity-60">
           {isUser ? "You" : message.role}
@@ -55,6 +64,20 @@ export function MessageBubble({
               </div>
             )}
             <div className="mt-2 flex flex-wrap gap-1.5">
+              {onInspect && (
+                <button
+                  className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold ${
+                    isUser
+                      ? "border-white/20 bg-white/10 text-white hover:bg-white/15"
+                      : "border-slate-800 bg-slate-900/40 text-slate-300 hover:bg-slate-800/60"
+                  }`}
+                  onClick={() => onInspect(message)}
+                  type="button"
+                >
+                  <Activity className="h-3 w-3" />
+                  Inspect
+                </button>
+              )}
               <Link
                 className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10px] font-semibold ${
                   isUser

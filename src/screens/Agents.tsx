@@ -1,5 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Archive, Bot, MessageSquare, Play, Plus, Send } from "lucide-react";
+import {
+  Activity,
+  Archive,
+  Bot,
+  CircleStop,
+  MessageSquare,
+  Play,
+  Plus,
+  RefreshCcw,
+  Send
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -31,6 +41,7 @@ export function AgentConsole() {
   const [selected, setSelected] = useState<AgentSession | null>(null);
   const [message, setMessage] = useState("");
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
+  const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [streamedEvents, setStreamedEvents] = useState<Record<string, RunEvent>>({});
   const queryClient = useQueryClient();
   const selectedAgent = useMemo(
@@ -129,10 +140,26 @@ export function AgentConsole() {
     () => [...historyItems].reverse().find((item) => item.run_id),
     [historyItems]
   );
+  const selectedRunMessage = useMemo(() => {
+    const explicit = historyItems.find(
+      (item) => item.message_id === selectedMessageId && item.run_id
+    );
+    return explicit || latestRunMessage;
+  }, [historyItems, latestRunMessage, selectedMessageId]);
   const activeRunCount = useMemo(
     () => historyItems.filter((item) => isActiveRunStatus(item.run_status)).length,
     [historyItems]
   );
+
+  useEffect(() => {
+    if (!selectedMessageId) {
+      setSelectedMessageId(latestRunMessage?.message_id || null);
+      return;
+    }
+    if (!historyItems.some((item) => item.message_id === selectedMessageId)) {
+      setSelectedMessageId(latestRunMessage?.message_id || null);
+    }
+  }, [historyItems, latestRunMessage?.message_id, selectedMessageId]);
 
   useEffect(() => {
     const runIds = activeRunKey ? activeRunKey.split("|") : [];
@@ -199,6 +226,7 @@ export function AgentConsole() {
 
   function selectSession(session: AgentSession) {
     setSelected(session);
+    setSelectedMessageId(null);
     if (agent) {
       setSearchParams(
         { agent, session_id: session.session_id },
@@ -327,12 +355,20 @@ export function AgentConsole() {
                 loading={sessionHealth.isLoading}
               />
             )}
-            <AgentRunSummary message={latestRunMessage} activeRunCount={activeRunCount} />
+            <AgentRunSummary
+              message={selectedRunMessage}
+              activeRunCount={activeRunCount}
+              canOperate={canOperate}
+              onCancel={(runId) => cancelRun.mutate(runId)}
+              onRetry={(text) => retry.mutate(text)}
+            />
             {filteredHistory.map((item) => (
               <MessageBubble
                 key={item.message_id}
                 message={item}
+                selected={selectedRunMessage?.message_id === item.message_id}
                 onCancel={canOperate ? (runId) => cancelRun.mutate(runId) : undefined}
+                onInspect={(message) => setSelectedMessageId(message.message_id)}
                 onRetry={canOperate ? (text) => retry.mutate(text) : undefined}
               />
             ))}
@@ -450,12 +486,20 @@ function AgentSessionHealthSummary({
 
 function AgentRunSummary({
   message,
-  activeRunCount
+  activeRunCount,
+  canOperate,
+  onCancel,
+  onRetry
 }: {
   message?: AgentMessage;
   activeRunCount: number;
+  canOperate: boolean;
+  onCancel: (runId: string) => void;
+  onRetry: (text: string) => void;
 }) {
   if (!message?.run_id) return null;
+  const canCancel = canOperate && isActiveRunStatus(message.run_status);
+  const canRetry = canOperate && message.role === "user";
   return (
     <div className="rounded-xl border border-slate-800 bg-[#0e1322]/70 p-4 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -464,6 +508,9 @@ function AgentRunSummary({
             <Activity className="h-4 w-4 text-emerald-400" />
             <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
               Run Activity
+            </span>
+            <span className="rounded-full border border-slate-700 bg-slate-900/60 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+              Focused Turn
             </span>
             {activeRunCount > 0 && (
               <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-[10px] font-semibold text-sky-300">
@@ -488,6 +535,14 @@ function AgentRunSummary({
               {message.latest_event.type}: {message.latest_event.message}
             </p>
           )}
+          <div className="mt-3 rounded-lg border border-slate-800 bg-[#050811] px-3 py-2">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              Message
+            </div>
+            <p className="line-clamp-3 whitespace-pre-wrap text-xs text-slate-300">
+              {message.message}
+            </p>
+          </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           <Link
@@ -505,6 +560,26 @@ function AgentRunSummary({
             Artifacts
             {message.artifact_count ? ` (${message.artifact_count})` : ""}
           </Link>
+          {canCancel && (
+            <button
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[11px] font-semibold text-red-300 hover:bg-red-500/15"
+              onClick={() => onCancel(message.run_id!)}
+              type="button"
+            >
+              <CircleStop className="h-3.5 w-3.5" />
+              Cancel
+            </button>
+          )}
+          {canRetry && (
+            <button
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-1.5 text-[11px] font-semibold text-slate-300 hover:bg-slate-800/60"
+              onClick={() => onRetry(message.message)}
+              type="button"
+            >
+              <RefreshCcw className="h-3.5 w-3.5" />
+              Retry
+            </button>
+          )}
         </div>
       </div>
     </div>

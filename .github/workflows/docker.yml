@@ -71,7 +71,13 @@ jobs:
           image="${IMAGE_NAME}:latest"
           settings_url="https://github.com/orgs/moiraweave-labs/packages/container/package/moiraweave-ui/settings"
           echo "Checking anonymous pull metadata for ${image}"
-          if ! docker manifest inspect "${image}" >/dev/null; then
-            echo "::error title=GHCR image is not public::${image} was pushed, but it is not pullable without authentication. Set package visibility to public in GitHub Packages: ${settings_url}"
-            exit 1
-          fi
+          for attempt in {1..12}; do
+            if docker manifest inspect "${image}" >/dev/null; then
+              echo "${image} is pullable without authentication."
+              exit 0
+            fi
+            echo "Anonymous pull check failed on attempt ${attempt}/12; retrying after GHCR propagation delay."
+            sleep 10
+          done
+          echo "::error title=GHCR image is not public::${image} was pushed, but it is not pullable without authentication. Set package visibility to public in GitHub Packages: ${settings_url}"
+          exit 1

@@ -17,8 +17,11 @@ export function ArtifactDetails({ artifact }: { artifact: Artifact }) {
     retry: false
   });
   const workloadName =
-    run.data?.workload_name || metadataString(metadata, ["workload_name", "source"]);
-  const sessionId = run.data?.session_id || metadataString(metadata, ["session_id"]);
+    artifact.workload_name ||
+    run.data?.workload_name ||
+    metadataString(metadata, ["workload_name", "source"]);
+  const sessionId =
+    artifact.session_id || run.data?.session_id || metadataString(metadata, ["session_id"]);
   const agentSessionPath =
     workloadName && sessionId
       ? `/agents?agent=${encodeURIComponent(workloadName)}&session_id=${encodeURIComponent(

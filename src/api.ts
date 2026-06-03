@@ -40,6 +40,8 @@ export type RunEvent = {
 export type Artifact = {
   id: string;
   run_id: string;
+  workload_name?: string | null;
+  session_id?: string | null;
   name: string;
   uri: string;
   content_type?: string | null;

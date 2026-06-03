@@ -341,6 +341,8 @@ async function mockApi(page: Page) {
         {
           id: "artifact-1",
           run_id: "run-1",
+          workload_name: "demo-agent",
+          session_id: "session1",
           name: "demo-reply.json",
           uri: "local://demo-reply.json",
           content_type: "application/json",
@@ -357,6 +359,8 @@ async function mockApi(page: Page) {
         {
           id: "artifact-1",
           run_id: "run-1",
+          workload_name: "demo-agent",
+          session_id: "session1",
           name: "demo-reply.json",
           uri: "local://reports/demo-reply.json",
           content_type: "application/json",
@@ -454,9 +458,12 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await page.getByRole("link", { name: "Artifacts" }).last().click();
   await expect(page).toHaveURL(/\/artifacts\?run_id=run-1/);
   await expect(page.getByText("demo-reply.json").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "demo-agent" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "session1" }).first()).toBeVisible();
+  await expect(page.getByRole("link", { name: "Session artifacts" })).toBeVisible();
   await expect(page.getByText('"source": "demo-agent"')).toBeVisible();
   await expect(page.getByText('"reply": "Demo agent received: hello"')).toBeVisible();
-  await page.getByRole("link", { name: "session1" }).click();
+  await page.getByRole("link", { name: "session1" }).first().click();
   await expect(page).toHaveURL(/\/agents\?agent=demo-agent&session_id=session1/);
   await expect(page.getByRole("heading", { name: "Chat Session: session1" })).toBeVisible();
 

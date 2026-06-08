@@ -77,6 +77,14 @@ const hermesManifest = {
   }
 };
 
+const hermesWorkload: Workload = {
+  name: "hermes",
+  type: "agent-service",
+  execution_mode: "session",
+  image: "ghcr.io/nousresearch/hermes-agent:latest",
+  manifest: hermesManifest
+};
+
 const openClawManifest = {
   apiVersion: "moiraweave.io/v1alpha1",
   kind: "Workload",
@@ -110,6 +118,14 @@ const openClawManifest = {
       }
     }
   }
+};
+
+const openClawWorkload: Workload = {
+  name: "openclaw",
+  type: "agent-service",
+  execution_mode: "session",
+  image: "ghcr.io/moiraweave-labs/openclaw-gateway:latest",
+  manifest: openClawManifest
 };
 
 async function mockApi(page: Page) {
@@ -247,10 +263,17 @@ async function mockApi(page: Page) {
     }
 
     if (path === "/v1/workloads/from-template" && method === "POST") {
-      if (!workloads.some((item) => item.name === demoWorkload.name)) {
-        workloads.push(demoWorkload);
+      const payload = await request.postDataJSON();
+      const templateWorkload =
+        payload.template_id === "hermes"
+          ? hermesWorkload
+          : payload.template_id === "openclaw"
+            ? openClawWorkload
+            : demoWorkload;
+      if (!workloads.some((item) => item.name === templateWorkload.name)) {
+        workloads.push(templateWorkload);
       }
-      await json(demoWorkload, 201);
+      await json(templateWorkload, 201);
       return;
     }
 
@@ -318,6 +341,26 @@ async function mockApi(page: Page) {
     }
 
     if (path === "/v1/secrets" && method === "GET") {
+      const workloadName = url.searchParams.get("workload_name");
+      if (workloadName === "hermes") {
+        await json({
+          status: "missing",
+          total: 1,
+          missing: 1,
+          secrets: [
+            {
+              name: "OPENAI_API_KEY",
+              present: false,
+              source: "environment",
+              workloads: ["hermes"],
+              references: ["spec.secrets", "spec.agent.requiredSecrets"],
+              remediation:
+                "Add OPENAI_API_KEY to local .env, Kubernetes Secret, or external secret manager before deploying."
+            }
+          ]
+        });
+        return;
+      }
       await json({ status: "ok", total: 0, missing: 0, secrets: [] });
       return;
     }
@@ -344,6 +387,63 @@ async function mockApi(page: Page) {
         reason: "Runtime is reachable.",
         deployments: [],
         recommendations: []
+      });
+      return;
+    }
+
+    if (path === "/v1/workloads/hermes/health" && method === "GET") {
+      await json({
+        workload_name: "hermes",
+        status: "degraded",
+        reason: "Required secrets are missing before the runtime can be healthy.",
+        deployments: [],
+        recommendations: ["Set OPENAI_API_KEY, deploy the runtime, then run preflight again."]
+      });
+      return;
+    }
+
+    if (path === "/v1/workloads/hermes/preflight" && method === "POST") {
+      await json({
+        workload_name: "hermes",
+        target: "local",
+        status: "warning",
+        checks: [
+          {
+            name: "manifest",
+            status: "passed",
+            message: "Manifest is valid.",
+            remediation: null,
+            metadata: {}
+          },
+          {
+            name: "secrets",
+            status: "warning",
+            message: "Missing secret references: OPENAI_API_KEY.",
+            remediation: "Add missing names to local .env or Kubernetes secrets.",
+            metadata: {
+              required: ["OPENAI_API_KEY"],
+              missing: ["OPENAI_API_KEY"]
+            }
+          },
+          {
+            name: "deployment_record",
+            status: "failed",
+            message: "No local/local deployment record exists for hermes.",
+            remediation: "Deploy or connect the runtime, then sync a local/local deployment record.",
+            metadata: { target: "local", env: "local" }
+          },
+          {
+            name: "worker_dispatch",
+            status: "passed",
+            message: "Worker consumer is attached.",
+            remediation: null,
+            metadata: { consumers: 1, pending: 0, lag: 0 }
+          }
+        ],
+        recommendations: [
+          "Set OPENAI_API_KEY before deploying Hermes.",
+          "Run moira deploy local --register after the runtime is started."
+        ]
       });
       return;
     }
@@ -671,4 +771,31 @@ test("explains real agent template requirements before creation", async ({ page 
   await expect(summary.getByText("readinessProbe:tcp")).toBeVisible();
   await expect(summary.getByText("gateway:18789")).toBeVisible();
   await expect(summary.getByText("browser:runtime-managed")).toBeVisible();
+});
+
+test("guides real agent preflight blockers with concrete next actions", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.getByLabel("Workload template").selectOption("hermes");
+  await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByText("Created hermes")).toBeVisible();
+
+  await page.getByRole("link", { name: "Run preflight" }).click();
+  await expect(page).toHaveURL(/\/operations\?workload=hermes/);
+  const guide = page.getByTestId("preflight-action-guide");
+  await expect(guide.getByText("Deployment Readiness Guide")).toBeVisible();
+  await expect(guide.getByText("Required secret names are missing: OPENAI_API_KEY")).toBeVisible();
+  await expect(guide.getByText("Values stay outside the UI and API.")).toBeVisible();
+  await expect(guide.getByText("printf 'OPENAI_API_KEY=...\\n' >> .env")).toBeVisible();
+
+  await page.getByRole("button", { name: "Preflight" }).click();
+  await expect(page.getByText("Missing secret references: OPENAI_API_KEY.")).toBeVisible();
+  await expect(guide.getByText("Set Missing Secrets")).toBeVisible();
+  await expect(guide.getByText("Sync Deployment Record")).toBeVisible();
+  await expect(guide.getByText("moira deploy local --register")).toBeVisible();
+  await expect(page.getByText("No local/local deployment record exists for hermes.")).toBeVisible();
 });

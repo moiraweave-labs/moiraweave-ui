@@ -168,6 +168,197 @@ export function OperationsSnapshot({
   );
 }
 
+export function PreflightActionGuide({
+  workloadName,
+  target,
+  env,
+  preflight,
+  inventory
+}: {
+  workloadName: string;
+  target: string;
+  env: string;
+  preflight?: PreflightResponse | null;
+  inventory?: SecretInventory;
+}) {
+  if (!workloadName) return null;
+
+  const blockers = preflight?.checks.filter((check) => check.status !== "passed") || [];
+  const missingSecrets = missingSecretNames(preflight, inventory);
+  const guideItems = actionGuideItems({
+    blockers,
+    missingSecrets,
+    target,
+    env
+  });
+  const state = !preflight
+    ? "not_checked"
+    : guideItems.length === 0
+      ? "ready"
+      : preflight.status;
+
+  return (
+    <div
+      className="space-y-3 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2"
+      data-testid="preflight-action-guide"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Deployment Readiness Guide
+          </div>
+          <div className="mt-1 text-[11px] text-slate-500">
+            {workloadName} / {target} / {env || "unset"}
+          </div>
+        </div>
+        <StateBadge state={state} />
+      </div>
+      {!preflight && (
+        <div className="rounded border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-[11px] text-sky-100">
+          Run preflight to check secrets, deployment records, worker dispatch,
+          runtime reachability, and runtime boundary declarations.
+        </div>
+      )}
+      {preflight && guideItems.length === 0 && (
+        <div className="rounded border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-[11px] text-emerald-100">
+          This workload is ready from the control-plane perspective. Continue
+          with deploy/apply guidance or start a session from Agent Console.
+        </div>
+      )}
+      {guideItems.length > 0 && (
+        <div className="grid gap-2">
+          {guideItems.map((item) => (
+            <div key={item.title} className="rounded border border-slate-800 bg-[#050811] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="font-semibold text-slate-200">{item.title}</div>
+                <StateBadge state={item.state} />
+              </div>
+              <div className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                {item.detail}
+              </div>
+              {item.command && (
+                <code className="mt-2 block whitespace-pre-wrap rounded border border-slate-800 bg-slate-950/70 px-2 py-1 text-[10px] text-sky-300">
+                  {item.command}
+                </code>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type ActionGuideItem = {
+  title: string;
+  detail: string;
+  state: string;
+  command?: string;
+};
+
+function actionGuideItems({
+  blockers,
+  missingSecrets,
+  target,
+  env
+}: {
+  blockers: PreflightCheck[];
+  missingSecrets: string[];
+  target: string;
+  env: string;
+}): ActionGuideItem[] {
+  const items: ActionGuideItem[] = [];
+  if (missingSecrets.length > 0) {
+    const names = missingSecrets.join(", ");
+    const localSecretLines = missingSecrets.map((name) => `${name}=...`).join("\\n");
+    const kubernetesSecretArgs = missingSecrets
+      .map((name) => `--from-literal=${name}=...`)
+      .join(" ");
+    items.push({
+      title: "Set Missing Secrets",
+      detail:
+        `Required secret names are missing: ${names}. Values stay outside the UI and API.`,
+      state: "missing",
+      command:
+        target === "kubernetes"
+          ? `kubectl create secret generic moiraweave-secrets ${kubernetesSecretArgs}`
+          : `printf '${localSecretLines}\\n' >> .env`
+    });
+  }
+
+  for (const check of blockers) {
+    if (check.name === "secrets" && missingSecrets.length > 0) continue;
+    if (check.name === "deployment_record") {
+      items.push({
+        title: "Sync Deployment Record",
+        detail:
+          check.remediation ||
+          `Register or sync the ${target}/${env} deployment record after the runtime is deployed.`,
+        state: check.status,
+        command:
+          target === "kubernetes"
+            ? `moira deploy k8s --env ${env || "dev"} --register`
+            : "moira deploy local --register"
+      });
+      continue;
+    }
+    if (check.name === "worker_dispatch") {
+      items.push({
+        title: "Restore Worker Dispatch",
+        detail:
+          check.remediation ||
+          "The API cannot see an attached worker consumer for queued runs.",
+        state: check.status,
+        command: "docker compose logs worker"
+      });
+      continue;
+    }
+    if (check.name === "runtime_reachability") {
+      items.push({
+        title: "Fix Runtime Reachability",
+        detail:
+          check.remediation ||
+          "The registered endpoint or probe did not respond from the control plane.",
+        state: check.status,
+        command: target === "kubernetes" ? "kubectl logs deploy/<workload>" : "docker compose logs <workload>"
+      });
+      continue;
+    }
+    if (check.name === "agent_adapter") {
+      items.push({
+        title: "Check Agent Adapter",
+        detail:
+          check.remediation ||
+          "The workload adapter is not supported or is missing required configuration.",
+        state: check.status
+      });
+      continue;
+    }
+    items.push({
+      title: preflightCheckLabel(check.name),
+      detail: check.remediation || check.message,
+      state: check.status
+    });
+  }
+  return items;
+}
+
+function missingSecretNames(
+  preflight?: PreflightResponse | null,
+  inventory?: SecretInventory
+): string[] {
+  const names = new Set<string>();
+  inventory?.secrets
+    .filter((secret) => !secret.present)
+    .forEach((secret) => names.add(secret.name));
+  const secretCheck = preflight?.checks.find((check) => check.name === "secrets");
+  const missing = secretCheck?.metadata.missing;
+  if (Array.isArray(missing)) {
+    missing.forEach((name) => names.add(String(name)));
+  }
+  return [...names].sort();
+}
+
 function deploymentState(
   deployment: Deployment | undefined,
   deploymentRecord: PreflightCheck | undefined

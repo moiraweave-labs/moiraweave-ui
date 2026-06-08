@@ -23,6 +23,7 @@ import {
   DeploymentsPanel,
   OperationError,
   OperationsSnapshot,
+  PreflightActionGuide,
   PreflightSummary,
   SecretInventorySummary,
   WorkloadHealthSummary
@@ -524,6 +525,13 @@ export function Health() {
               deployment={currentDeployment}
               health={selectedWorkloadHealth.data}
               preflight={preflight}
+            />
+            <PreflightActionGuide
+              workloadName={workload}
+              target={target}
+              env={planEnv}
+              preflight={preflight}
+              inventory={secretInventory.data}
             />
             <OperationError error={recordDeployment.error} fallback="Deployment record failed. Check JSON and endpoint." />
             <OperationError error={planOperation.error} fallback="Deployment plan failed. Check target and workload deployment mode." />

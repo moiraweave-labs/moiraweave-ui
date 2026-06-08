@@ -164,7 +164,7 @@ export function Health() {
   const [workload, setWorkload] = useState(() => requestedWorkload);
   const [target, setTarget] = useState("local");
   const [planEnv, setPlanEnv] = useState("local");
-  const [status, setStatus] = useState("running");
+  const [status, setStatus] = useState("deployed");
   const [endpoint, setEndpoint] = useState("");
   const [metadataDraft, setMetadataDraft] = useState(SAMPLE_DEPLOYMENT_METADATA);
   const [plan, setPlan] = useState<DeploymentPlan | null>(null);
@@ -498,11 +498,12 @@ export function Health() {
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}
               >
-                <option value="generated">Generated</option>
-                <option value="running">Running</option>
-                <option value="applied">Applied</option>
+                <option value="created">Created</option>
+                <option value="deployed">Deployed</option>
+                <option value="reachable">Reachable</option>
                 <option value="healthy">Healthy</option>
                 <option value="failed">Failed</option>
+                <option value="unreachable">Unreachable</option>
                 <option value="unhealthy">Unhealthy</option>
                 <option value="lost">Lost</option>
               </select>

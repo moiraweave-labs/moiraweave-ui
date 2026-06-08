@@ -116,14 +116,14 @@ export function OperationsSnapshot({
     },
     {
       label: "Deployed",
-      state: deployment?.status || deploymentRecord?.status || "missing",
+      state: deploymentState(deployment, deploymentRecord),
       detail: deployment
         ? `${deployment.target}/${deployment.env}`
         : `No ${target}/${env} record`
     },
     {
       label: "Reachable",
-      state: reachability?.status || (deployment?.endpoint ? "unknown" : "not_checked"),
+      state: reachabilityState(reachability),
       detail: reachability?.message || deployment?.endpoint || "Run preflight"
     },
     {
@@ -166,6 +166,27 @@ export function OperationsSnapshot({
       </div>
     </div>
   );
+}
+
+function deploymentState(
+  deployment: Deployment | undefined,
+  deploymentRecord: PreflightCheck | undefined
+): string {
+  const badDeploymentStates = new Set(["failed", "lost", "unhealthy", "unreachable"]);
+  if (deployment) {
+    return badDeploymentStates.has(deployment.status) ? deployment.status : "deployed";
+  }
+  if (!deploymentRecord) return "missing";
+  if (deploymentRecord.status === "passed") return "deployed";
+  if (deploymentRecord.status === "failed") return "failed";
+  return deploymentRecord.status;
+}
+
+function reachabilityState(reachability: PreflightCheck | undefined): string {
+  if (!reachability) return "not_checked";
+  if (reachability.status === "passed") return "reachable";
+  if (reachability.status === "failed") return "unreachable";
+  return reachability.status;
 }
 
 function operationNextAction({

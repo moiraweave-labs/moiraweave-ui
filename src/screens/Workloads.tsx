@@ -156,6 +156,7 @@ export function Workloads() {
             <div>
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Template</label>
               <select
+                aria-label="Workload template"
                 className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
                 value={templateId}
                 onChange={(event) => setTemplateId(event.target.value)}
@@ -178,6 +179,7 @@ export function Workloads() {
                   </label>
                   {parameter.options.length > 0 ? (
                     <select
+                      aria-label={parameter.label}
                       className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
                       value={templateParams[parameter.name] || ""}
                       onChange={(event) =>
@@ -195,6 +197,7 @@ export function Workloads() {
                     </select>
                   ) : (
                     <input
+                      aria-label={parameter.label}
                       className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
                       type={parameter.type === "number" ? "number" : "text"}
                       value={templateParams[parameter.name] || ""}
@@ -296,7 +299,10 @@ export function Workloads() {
 function TemplateSummary({ template }: { template: WorkloadTemplate }) {
   const details = templateDetails(template.manifest);
   return (
-    <div className="rounded-lg border border-slate-800/80 bg-[#0b0f19]/50 p-3">
+    <div
+      className="rounded-lg border border-slate-800/80 bg-[#0b0f19]/50 p-3"
+      data-testid="template-summary"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-300">
           {template.workload_type}
@@ -309,11 +315,16 @@ function TemplateSummary({ template }: { template: WorkloadTemplate }) {
       </div>
       <p className="mt-2 text-xs leading-relaxed text-slate-400">{template.description}</p>
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <TemplateDetail label="Image" value={details.image || "-"} />
+        <TemplateDetail label="Execution" value={details.execution || "-"} />
+        <TemplateDetail label="Endpoint" value={details.endpoint || "-"} />
         <TemplateDetail label="Adapter" value={details.adapter || "-"} />
+        <TemplateDetail label="Health" value={details.health || "-"} />
         <TemplateDetail label="Tool Owner" value={details.toolOwnership || "runtime"} />
         <TemplateDetail label="Ports" value={details.ports || "-"} />
         <TemplateDetail label="Secrets" value={details.secrets || "none"} />
         <TemplateDetail label="Persistence" value={details.persistence || "disabled"} />
+        <TemplateDetail label="Workspace" value={details.workspace || "ephemeral"} />
         <TemplateDetail label="Runtime Boundaries" value={details.runtimeBoundaries || "-"} />
       </div>
       {details.hasChannels && (
@@ -367,6 +378,8 @@ function templateDetails(manifest?: Record<string, unknown> | null) {
   const spec = objectValue(manifest?.spec);
   const agent = objectValue(spec.agent);
   const runtime = agentRuntimeSummary(manifest || undefined);
+  const deployment = objectValue(spec.deployment);
+  const execution = objectValue(spec.execution);
   const ports = Array.isArray(spec.ports)
     ? spec.ports
         .map((item) => {
@@ -377,23 +390,60 @@ function templateDetails(manifest?: Record<string, unknown> | null) {
         .filter(Boolean)
         .join(", ")
     : "";
+  const firstPort = Array.isArray(spec.ports) ? objectValue(spec.ports[0]) : {};
+  const serviceName =
+    typeof deployment.serviceName === "string"
+      ? deployment.serviceName
+      : typeof manifest?.metadata === "object" &&
+          manifest.metadata !== null &&
+          "name" in manifest.metadata
+        ? String((manifest.metadata as Record<string, unknown>).name)
+        : "";
+  const endpoint =
+    typeof spec.endpoint === "string"
+      ? spec.endpoint
+      : typeof agent.baseUrl === "string"
+        ? agent.baseUrl
+        : serviceName && firstPort.port
+          ? `http://${serviceName}:${firstPort.port}`
+          : "";
   const secrets = [
     ...stringList(spec.secrets),
     ...stringList(agent.requiredSecrets)
   ].filter((secret, index, all) => all.indexOf(secret) === index);
   const persistence = objectValue(spec.persistence);
+  const readinessProbe = objectValue(spec.readinessProbe);
   const channels = agentChannels(manifest || undefined);
   const persistenceLabel =
     persistence.enabled === true
       ? String(persistence.mountPath || "enabled")
       : "";
+  const workspace =
+    typeof agent.workspaceMount === "string"
+      ? agent.workspaceMount
+      : runtime.fields.find((field) => field.label === "Workspace")?.value || "";
+  const executionMode = typeof execution.mode === "string" ? execution.mode : "";
+  const deploymentMode = typeof deployment.mode === "string" ? deployment.mode : "";
+  const health =
+    typeof agent.statusPath === "string"
+      ? agent.statusPath
+      : readinessProbe.httpGet
+        ? "readinessProbe:http"
+        : readinessProbe.tcpSocket
+          ? "readinessProbe:tcp"
+          : "";
 
   return {
+    image: typeof spec.image === "string" ? spec.image : "",
+    execution: [executionMode, deploymentMode].filter(Boolean).join(" / "),
+    endpoint,
     adapter: typeof agent.adapter === "string" ? agent.adapter : "",
+    health,
     toolOwnership: runtime.toolOwnership,
     ports,
     secrets: secrets.join(", "),
     persistence: persistenceLabel,
+    workspace,
     runtimeBoundaries: runtime.boundaryLabels.join(", "),
     runtimeCapabilities: runtime.capabilities,
     channels,

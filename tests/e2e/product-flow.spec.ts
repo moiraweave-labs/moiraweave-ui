@@ -39,6 +39,79 @@ const demoWorkload: Workload = {
   }
 };
 
+const hermesManifest = {
+  apiVersion: "moiraweave.io/v1alpha1",
+  kind: "Workload",
+  metadata: { name: "hermes" },
+  spec: {
+    type: "agent-service",
+    image: "ghcr.io/nousresearch/hermes-agent:latest",
+    deployment: {
+      mode: "managed",
+      targets: ["local", "kubernetes"],
+      serviceName: "hermes"
+    },
+    execution: { mode: "session", timeoutSeconds: 172800 },
+    ports: [{ name: "http", port: 8642 }],
+    persistence: { enabled: true, mountPath: "/workspace" },
+    readinessProbe: { httpGet: { path: "/", port: "http" } },
+    secrets: ["OPENAI_API_KEY"],
+    agent: {
+      adapter: "hermes",
+      toolOwnership: "runtime",
+      requiredSecrets: ["OPENAI_API_KEY"],
+      workspaceMount: "/workspace",
+      authTokenEnv: "HERMES_API_SERVER_KEY",
+      exposedChannels: ["ui", "api"],
+      externalOwnedChannels: ["telegram"],
+      runtimeRequirements: {
+        filesystem: { persistentWorkspace: true, workspaceMount: "/workspace" },
+        network: { egress: "enabled" },
+        webSearch: { enabled: true },
+        browser: { mode: "runtime-managed" },
+        terminal: { mode: "runtime-managed", approval: "runtime" },
+        mcp: { enabled: true },
+        messaging: { enabled: true }
+      }
+    }
+  }
+};
+
+const openClawManifest = {
+  apiVersion: "moiraweave.io/v1alpha1",
+  kind: "Workload",
+  metadata: { name: "openclaw" },
+  spec: {
+    type: "agent-service",
+    image: "ghcr.io/moiraweave-labs/openclaw-gateway:latest",
+    deployment: {
+      mode: "managed",
+      targets: ["local", "kubernetes"],
+      serviceName: "openclaw"
+    },
+    execution: { mode: "session", timeoutSeconds: 172800 },
+    ports: [{ name: "gateway", port: 18789 }],
+    persistence: { enabled: true, mountPath: "/workspace" },
+    readinessProbe: { tcpSocket: { port: "gateway" } },
+    agent: {
+      adapter: "openclaw",
+      toolOwnership: "runtime",
+      workspaceMount: "/workspace",
+      exposedChannels: ["ui", "api"],
+      externalOwnedChannels: ["telegram"],
+      runtimeRequirements: {
+        filesystem: { persistentWorkspace: true, workspaceMount: "/workspace" },
+        network: { egress: "enabled" },
+        webSearch: { enabled: true },
+        browser: { mode: "runtime-managed" },
+        terminal: { mode: "runtime-managed", approval: "runtime" },
+        mcp: { enabled: true },
+        messaging: { enabled: true }
+      }
+    }
+  }
+};
+
 async function mockApi(page: Page) {
   const workloads: Workload[] = [];
   const sessions: Array<{
@@ -143,6 +216,26 @@ async function mockApi(page: Page) {
             }
           ],
           manifest: demoWorkload.manifest
+        },
+        {
+          id: "hermes",
+          name: "Hermes Agent",
+          category: "agent",
+          description: "Managed Hermes runtime with persistence, secrets, and UI/API sessions.",
+          workload_type: "agent-service",
+          tags: ["hermes", "managed", "long-running"],
+          parameters: [],
+          manifest: hermesManifest
+        },
+        {
+          id: "openclaw",
+          name: "OpenClaw",
+          category: "agent",
+          description: "Managed OpenClaw gateway runtime with session-oriented dispatch.",
+          workload_type: "agent-service",
+          tags: ["openclaw", "managed", "browser"],
+          parameters: [],
+          manifest: openClawManifest
         }
       ]);
       return;
@@ -549,4 +642,33 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByRole("heading", { name: "Audit Trail" })).toBeVisible();
   await expect(page.getByText("agent.message")).toBeVisible();
   await expect(page.getByText("session1").last()).toBeVisible();
+});
+
+test("explains real agent template requirements before creation", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.getByLabel("Workload template").selectOption("hermes");
+  const summary = page.getByTestId("template-summary");
+  await expect(summary.getByText("Managed Hermes runtime with persistence")).toBeVisible();
+  await expect(summary.getByText("ghcr.io/nousresearch/hermes-agent:latest")).toBeVisible();
+  await expect(summary.getByText("session / managed")).toBeVisible();
+  await expect(summary.getByText("http://hermes:8642")).toBeVisible();
+  await expect(summary.getByText("OPENAI_API_KEY")).toBeVisible();
+  await expect(summary.getByText("workspace:persistent")).toBeVisible();
+  await expect(summary.getByText("Web Search: runtime")).toBeVisible();
+  await expect(summary.getByText("MCP: runtime")).toBeVisible();
+  await expect(summary.getByText("Messaging: runtime")).toBeVisible();
+  await expect(summary.getByText("telegram")).toBeVisible();
+
+  await page.getByLabel("Workload template").selectOption("openclaw");
+  await expect(summary.getByText("Managed OpenClaw gateway runtime")).toBeVisible();
+  await expect(summary.getByText("ghcr.io/moiraweave-labs/openclaw-gateway:latest")).toBeVisible();
+  await expect(summary.getByText("http://openclaw:18789")).toBeVisible();
+  await expect(summary.getByText("readinessProbe:tcp")).toBeVisible();
+  await expect(summary.getByText("gateway:18789")).toBeVisible();
+  await expect(summary.getByText("browser:runtime-managed")).toBeVisible();
 });

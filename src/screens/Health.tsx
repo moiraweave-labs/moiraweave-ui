@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Activity,
+  Bot,
   CheckCircle2,
   Plus,
   RefreshCcw,
@@ -9,9 +11,16 @@ import {
   Trash2
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
-import type { DeploymentOperation, DeploymentPlan, PreflightResponse } from "../api";
+import type {
+  Deployment,
+  DeploymentOperation,
+  DeploymentPlan,
+  PreflightResponse,
+  RunStatus,
+  WorkloadInfo
+} from "../api";
 import { useAuthProfile } from "../auth";
 import { SAMPLE_DEPLOYMENT_METADATA } from "../constants";
 import { HealthTile, Panel, PermissionNotice, StateBadge } from "../components/common";
@@ -28,6 +37,12 @@ import {
   SecretInventorySummary,
   WorkloadHealthSummary
 } from "../components/operations";
+import {
+  agentChannels,
+  formatDate,
+  isActiveRunStatus,
+  isAttentionRunStatus
+} from "../utils";
 
 function hasStatus(body: unknown, status: string): boolean {
   return Boolean(
@@ -131,6 +146,227 @@ function platformCheckAction(name: string, check: ReadinessCheck): string | null
   return "Run moira doctor, inspect the relevant service logs, and retry preflight after the dependency is healthy.";
 }
 
+function AgentOperationsPanel({
+  deployments,
+  env,
+  isLoading,
+  runs,
+  target,
+  workloads
+}: {
+  deployments: Deployment[];
+  env: string;
+  isLoading: boolean;
+  runs: RunStatus[];
+  target: string;
+  workloads: WorkloadInfo[];
+}) {
+  const agents = workloads.filter((item) => item.type === "agent-service");
+
+  return (
+    <Panel title="Agent Runtime Supervision">
+      <div className="divide-y divide-slate-900">
+        {isLoading && (
+          <div className="px-5 py-6 text-xs text-slate-500">Loading agent operations...</div>
+        )}
+        {!isLoading && agents.length === 0 && (
+          <div className="px-5 py-6 text-xs text-slate-500">
+            No agent workloads have been created yet.
+          </div>
+        )}
+        {!isLoading &&
+          agents.map((agent) => {
+            const agentRuns = runs
+              .filter((run) => run.workload_name === agent.name)
+              .sort((left, right) => right.created_at.localeCompare(left.created_at));
+            const activeRuns = agentRuns.filter((run) => isActiveRunStatus(run.status));
+            const attentionRuns = agentRuns.filter((run) => isAttentionRunStatus(run.status));
+            const cancellationRuns = agentRuns.filter((run) =>
+              ["cancel_requested", "cancelling"].includes(run.status)
+            );
+            const longRunningRuns = activeRuns.filter((run) => runAgeHours(run) >= 1);
+            const record = deployments.find(
+              (deployment) =>
+                deployment.workload_name === agent.name &&
+                deployment.target === target &&
+                deployment.env === env
+            );
+            const mode = workloadDeploymentMode(agent);
+            const channels = agentChannels(agent.manifest);
+            const nextAction = agentSupervisionAction({
+              attentionRuns,
+              cancellationRuns,
+              channels,
+              env,
+              mode,
+              record,
+              target
+            });
+            const latestRun = agentRuns[0];
+
+            return (
+              <div
+                key={agent.name}
+                className="grid gap-4 px-5 py-4 text-xs xl:grid-cols-[220px_1fr_260px]"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-emerald-400" />
+                    <Link
+                      className="truncate font-semibold text-sky-300 hover:underline"
+                      to={`/agents?agent=${encodeURIComponent(agent.name)}`}
+                    >
+                      {agent.name}
+                    </Link>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    <span className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1 font-mono text-[10px] text-slate-400">
+                      {mode}
+                    </span>
+                    <span className="rounded border border-slate-800 bg-slate-950/40 px-2 py-1 font-mono text-[10px] text-slate-400">
+                      {target}/{env || "unset"}
+                    </span>
+                  </div>
+                  {channels.externalOwned.length > 0 && (
+                    <div className="mt-2 rounded border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-200">
+                      External-owned: {channels.externalOwned.join(", ")}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-4">
+                  <AgentMetric
+                    label="Deployment"
+                    state={record?.status || "missing"}
+                    value={record ? record.status : "No record"}
+                  />
+                  <AgentMetric
+                    label="Active"
+                    state={activeRuns.length ? "running" : "ready"}
+                    value={String(activeRuns.length)}
+                  />
+                  <AgentMetric
+                    label="Long-running"
+                    state={longRunningRuns.length ? "running" : "ready"}
+                    value={String(longRunningRuns.length)}
+                  />
+                  <AgentMetric
+                    label="Attention"
+                    state={
+                      cancellationRuns.length
+                        ? "cancel_requested"
+                        : attentionRuns.length
+                          ? "failed"
+                          : "ready"
+                    }
+                    value={String(cancellationRuns.length + attentionRuns.length)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <div className="rounded border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-[11px] text-sky-100">
+                    {nextAction}
+                  </div>
+                  {latestRun && (
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
+                      <Activity className="h-3 w-3" />
+                      <span>Latest</span>
+                      <Link
+                        className="font-mono text-sky-300 hover:underline"
+                        to={`/runs/${latestRun.run_id}`}
+                      >
+                        {latestRun.run_id.slice(0, 8)}
+                      </Link>
+                      <StateBadge state={latestRun.status} />
+                      <span>{formatDate(latestRun.created_at)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+      </div>
+    </Panel>
+  );
+}
+
+function AgentMetric({
+  label,
+  state,
+  value
+}: {
+  label: string;
+  state: string;
+  value: string;
+}) {
+  return (
+    <div className="min-w-0 rounded border border-slate-800 bg-[#050811] p-2">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+          {label}
+        </span>
+        <StateBadge state={state} />
+      </div>
+      <div className="truncate text-[11px] text-slate-300" title={value}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function workloadDeploymentMode(workload: WorkloadInfo): string {
+  const spec = objectValue(workload.manifest.spec);
+  const deployment = objectValue(spec.deployment);
+  return typeof deployment.mode === "string" ? deployment.mode : "managed";
+}
+
+function agentSupervisionAction({
+  attentionRuns,
+  cancellationRuns,
+  channels,
+  env,
+  mode,
+  record,
+  target
+}: {
+  attentionRuns: RunStatus[];
+  cancellationRuns: RunStatus[];
+  channels: ReturnType<typeof agentChannels>;
+  env: string;
+  mode: string;
+  record?: Deployment;
+  target: string;
+}) {
+  if (!record) {
+    if (mode === "external" || target === "external") {
+      return "Register the external endpoint after verifying the runtime owner, health URL, and credentials.";
+    }
+    return `Run plan/apply from CLI or CI, then sync the ${target}/${env || "local"} deployment record.`;
+  }
+  if (cancellationRuns.length > 0) {
+    return "Cancellation is pending. Watch the run until the adapter acknowledges canceled or inspect runtime logs.";
+  }
+  if (attentionRuns.length > 0) {
+    return "Open the latest failed/lost run, inspect events and artifacts, then retry from Agent Console when appropriate.";
+  }
+  if (channels.externalOwned.length > 0) {
+    return "Runtime-owned channels are supervised here, but messages stay in the agent connector unless the adapter exposes them.";
+  }
+  return "Agent is registered for this environment. Use preflight for reachability and Agent Console for sessions.";
+}
+
+function runAgeHours(run: RunStatus): number {
+  const created = Date.parse(run.created_at);
+  if (Number.isNaN(created)) return 0;
+  return (Date.now() - created) / 3_600_000;
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 function deploymentPlanFromOperation(operation: DeploymentOperation): DeploymentPlan | null {
   const plan = operation.metadata.plan;
   if (!plan || typeof plan !== "object") return null;
@@ -209,6 +445,11 @@ export function Health() {
     refetchInterval: 10000
   });
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
+  const runs = useQuery({
+    queryKey: ["runs", "operations-center"],
+    queryFn: () => api.runs(),
+    refetchInterval: 5000
+  });
   const selectedWorkloadHealth = useQuery({
     queryKey: ["workload-health", workload, planEnv],
     queryFn: () => api.workloadHealth(workload, planEnv || undefined),
@@ -368,6 +609,14 @@ export function Health() {
         />
       </div>
       <PlatformChecks body={ready.data} />
+      <AgentOperationsPanel
+        deployments={deployments.data || []}
+        env={planEnv}
+        isLoading={workloads.isLoading || runs.isLoading || deployments.isLoading}
+        runs={runs.data || []}
+        target={target}
+        workloads={workloads.data || []}
+      />
       <Panel
         title="Operations Center"
         action={

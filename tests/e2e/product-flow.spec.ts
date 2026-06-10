@@ -748,9 +748,13 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await page.goto("/operations?workload=demo-agent");
   await expect(page.getByRole("heading", { name: "Operations Center" })).toBeVisible();
   await expect(page.getByText("Operational Snapshot")).toBeVisible();
-  await expect(page.getByText("local/local", { exact: true })).toBeVisible();
+  await expect(page.getByText("local/local", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Platform Checks")).toBeVisible();
   await expect(page.getByText("docker compose logs ui")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Agent Runtime Supervision" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "demo-agent" }).first()).toBeVisible();
+  await expect(page.getByText("Run plan/apply from CLI or CI")).toBeVisible();
+  await expect(page.getByText("Latest")).toBeVisible();
   await page.getByRole("button", { name: "Plan" }).click();
   await expect(page.getByText("operation.plan")).toBeVisible();
   await expect(page.getByText("Deployment plan generated.")).toBeVisible();

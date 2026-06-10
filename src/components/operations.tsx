@@ -185,12 +185,15 @@ export function PreflightActionGuide({
 
   const blockers = preflight?.checks.filter((check) => check.status !== "passed") || [];
   const missingSecrets = missingSecretNames(preflight, inventory);
-  const guideItems = actionGuideItems({
-    blockers,
-    missingSecrets,
-    target,
-    env
-  });
+  const guideItems =
+    preflight?.action_guide && preflight.action_guide.length > 0
+      ? preflight.action_guide
+      : actionGuideItems({
+          blockers,
+          missingSecrets,
+          target,
+          env
+        });
   const state = !preflight
     ? "not_checked"
     : guideItems.length === 0

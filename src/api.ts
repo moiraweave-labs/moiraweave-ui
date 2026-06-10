@@ -164,12 +164,20 @@ export type PreflightCheck = {
   metadata: Record<string, unknown>;
 };
 
+export type PreflightAction = {
+  title: string;
+  state: string;
+  detail: string;
+  command?: string | null;
+};
+
 export type PreflightResponse = {
   workload_name: string;
   target: string;
   status: string;
   checks: PreflightCheck[];
   recommendations: string[];
+  action_guide?: PreflightAction[];
 };
 
 export type SecretInventoryItem = {

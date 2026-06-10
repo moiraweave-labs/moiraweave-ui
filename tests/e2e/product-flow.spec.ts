@@ -443,6 +443,22 @@ async function mockApi(page: Page) {
         recommendations: [
           "Set OPENAI_API_KEY before deploying Hermes.",
           "Run moira deploy local --register after the runtime is started."
+        ],
+        action_guide: [
+          {
+            title: "Set Missing Secrets",
+            state: "missing",
+            detail:
+              "Required secret names are missing: OPENAI_API_KEY. Values stay outside the API and UI.",
+            command: "printf 'OPENAI_API_KEY=...\\n' >> .env"
+          },
+          {
+            title: "Sync Deployment Record",
+            state: "warning",
+            detail:
+              "Deploy or connect the runtime, then sync a local/local deployment record.",
+            command: "moira deploy local --register"
+          }
         ]
       });
       return;

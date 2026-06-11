@@ -139,6 +139,7 @@ async function mockApi(page: Page) {
   const history: Array<Record<string, unknown>> = [];
   const deploymentOperations: Array<Record<string, unknown>> = [];
   const deploymentOperationEvents: Record<string, Array<Record<string, unknown>>> = {};
+  const apiKeys: Array<Record<string, unknown>> = [];
 
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -184,6 +185,45 @@ async function mockApi(page: Page) {
         credential_type: "jwt",
         api_key_id: null
       });
+      return;
+    }
+
+    if (path === "/auth/api-keys" && method === "GET") {
+      await json(apiKeys);
+      return;
+    }
+
+    if (path === "/auth/api-keys" && method === "POST") {
+      const body = request.postDataJSON() as {
+        name: string;
+        subject: string;
+        role: string;
+      };
+      const key = {
+        key_id: `key-${apiKeys.length + 1}`,
+        name: body.name,
+        subject: body.subject,
+        role: body.role,
+        secret_prefix: "mwk_e2e...",
+        created_by: "admin",
+        created_at: "2026-05-26T08:00:00+00:00",
+        last_used_at: null,
+        revoked_at: null
+      };
+      apiKeys.unshift(key);
+      await json({ ...key, secret: "mwk_e2e_created_secret" }, 201);
+      return;
+    }
+
+    if (path.startsWith("/auth/api-keys/") && method === "DELETE") {
+      const keyId = path.split("/").pop();
+      const key = apiKeys.find((item) => item.key_id === keyId);
+      if (!key) {
+        await json({ detail: "API key not found" }, 404);
+        return;
+      }
+      key.revoked_at = "2026-05-26T08:03:00+00:00";
+      await json(key);
       return;
     }
 
@@ -823,4 +863,25 @@ test("guides real agent preflight blockers with concrete next actions", async ({
   await expect(guide.getByText("Sync Deployment Record")).toBeVisible();
   await expect(guide.getByText("moira deploy local --register")).toBeVisible();
   await expect(page.getByText("No local/local deployment record exists for hermes.")).toBeVisible();
+});
+
+test("manages API keys from the security console", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.getByRole("link", { name: "Security" }).click();
+  await expect(page.getByRole("heading", { name: "Create API Key" })).toBeVisible();
+  await page.getByLabel("API key name").fill("ci deploy");
+  await page.getByLabel("API key subject").fill("ci");
+  await page.getByLabel("API key role").selectOption("operator");
+  await page.getByRole("button", { name: "Create Key" }).click();
+
+  await expect(page.getByText("mwk_e2e_created_secret")).toBeVisible();
+  await expect(page.getByRole("table").getByText("ci deploy")).toBeVisible();
+  await expect(page.getByText("ci").first()).toBeVisible();
+  await page.getByTitle("Revoke API key").click();
+  await expect(page.getByText("revoked")).toBeVisible();
 });

@@ -103,6 +103,22 @@ export type AuthProfile = {
   api_key_id?: string | null;
 };
 
+export type ApiKey = {
+  key_id: string;
+  name: string;
+  subject: string;
+  role: string;
+  secret_prefix: string;
+  created_by: string;
+  created_at: string;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+};
+
+export type ApiKeyCreateResponse = ApiKey & {
+  secret: string;
+};
+
 export type Deployment = {
   deployment_id: string;
   workload_name: string;
@@ -277,6 +293,16 @@ export const api = {
       body: JSON.stringify({ username, password })
     }),
   me: () => request<AuthProfile>("/auth/me"),
+  apiKeys: () => request<ApiKey[]>("/auth/api-keys"),
+  createApiKey: (body: { name: string; subject: string; role: string }) =>
+    request<ApiKeyCreateResponse>("/auth/api-keys", {
+      method: "POST",
+      body: JSON.stringify(body)
+    }),
+  revokeApiKey: (keyId: string) =>
+    request<ApiKey>(`/auth/api-keys/${encodeURIComponent(keyId)}`, {
+      method: "DELETE"
+    }),
   workloads: () => request<WorkloadInfo[]>("/v1/workloads"),
   workload: (name: string) => request<WorkloadInfo>(`/v1/workloads/${name}`),
   templates: () => request<WorkloadTemplate[]>("/v1/templates"),

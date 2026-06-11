@@ -54,6 +54,10 @@ export function StateBadge({ state }: { state: string }) {
     created: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
     deployed: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
     reachable: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    active: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    admin: "bg-sky-500/10 text-sky-300 border-sky-500/20",
+    operator: "bg-emerald-500/10 text-emerald-300 border-emerald-500/20",
+    viewer: "bg-slate-500/10 text-slate-300 border-slate-500/20",
     pending: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     warning: "bg-amber-500/10 text-amber-400 border-amber-500/20",
     not_checked: "bg-amber-500/10 text-amber-400 border-amber-500/20",
@@ -67,6 +71,7 @@ export function StateBadge({ state }: { state: string }) {
     canceled: "bg-slate-500/10 text-slate-400 border-slate-500/20",
     cancelling: "bg-slate-500/10 text-slate-400 border-slate-500/20",
     cancel_requested: "bg-slate-500/10 text-slate-400 border-slate-500/20",
+    revoked: "bg-slate-500/10 text-slate-400 border-slate-500/20",
     lost: "bg-red-500/10 text-red-400 border-red-500/20"
   }[state] || "bg-slate-500/10 text-slate-400 border-slate-500/20";
 

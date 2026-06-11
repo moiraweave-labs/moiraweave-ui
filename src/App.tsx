@@ -28,6 +28,7 @@ import { Artifacts } from "./screens/Artifacts";
 import { Health } from "./screens/Health";
 import { RunDetail } from "./screens/RunDetail";
 import { Runs } from "./screens/Runs";
+import { Security } from "./screens/Security";
 import { Workloads } from "./screens/Workloads";
 
 function Shell() {
@@ -38,7 +39,8 @@ function Shell() {
     { to: "/runs", label: "Runs", icon: Activity },
     { to: "/agents", label: "Agents", icon: Bot },
     { to: "/artifacts", label: "Artifacts", icon: Archive },
-    { to: "/operations", label: "Operations", icon: Server }
+    { to: "/operations", label: "Operations", icon: Server },
+    { to: "/security", label: "Security", icon: KeyRound }
   ];
 
   function onTokenChange(next: string) {
@@ -149,6 +151,7 @@ function Shell() {
               <Route path="/agents" element={<AgentConsole />} />
               <Route path="/artifacts" element={<Artifacts />} />
               <Route path="/operations" element={<Health />} />
+              <Route path="/security" element={<Security />} />
             </Routes>
           )}
         </div>

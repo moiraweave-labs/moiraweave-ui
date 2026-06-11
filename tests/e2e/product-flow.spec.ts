@@ -215,6 +215,34 @@ async function mockApi(page: Page) {
       return;
     }
 
+    if (path.startsWith("/auth/api-keys/") && path.endsWith("/rotate") && method === "POST") {
+      const keyId = path.split("/")[3];
+      const key = apiKeys.find((item) => item.key_id === keyId);
+      if (!key) {
+        await json({ detail: "API key not found" }, 404);
+        return;
+      }
+      if (key.revoked_at) {
+        await json({ detail: "API key is already revoked" }, 409);
+        return;
+      }
+      key.revoked_at = "2026-05-26T08:04:00+00:00";
+      const replacement = {
+        key_id: `key-${apiKeys.length + 1}`,
+        name: key.name,
+        subject: key.subject,
+        role: key.role,
+        secret_prefix: "mwk_rot...",
+        created_by: "admin",
+        created_at: "2026-05-26T08:04:00+00:00",
+        last_used_at: null,
+        revoked_at: null
+      };
+      apiKeys.unshift(replacement);
+      await json({ ...replacement, secret: "mwk_e2e_rotated_secret" }, 201);
+      return;
+    }
+
     if (path.startsWith("/auth/api-keys/") && method === "DELETE") {
       const keyId = path.split("/").pop();
       const key = apiKeys.find((item) => item.key_id === keyId);
@@ -882,6 +910,9 @@ test("manages API keys from the security console", async ({ page }) => {
   await expect(page.getByText("mwk_e2e_created_secret")).toBeVisible();
   await expect(page.getByRole("table").getByText("ci deploy")).toBeVisible();
   await expect(page.getByText("ci").first()).toBeVisible();
-  await page.getByTitle("Revoke API key").click();
+  await page.getByTitle("Rotate API key").click();
+  await expect(page.getByText("mwk_e2e_rotated_secret")).toBeVisible();
+  await expect(page.getByRole("table").getByText("revoked")).toBeVisible();
+  await page.getByTitle("Revoke API key").first().click();
   await expect(page.getByText("revoked")).toBeVisible();
 });

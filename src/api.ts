@@ -299,6 +299,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body)
     }),
+  rotateApiKey: (keyId: string) =>
+    request<ApiKeyCreateResponse>(`/auth/api-keys/${encodeURIComponent(keyId)}/rotate`, {
+      method: "POST"
+    }),
   revokeApiKey: (keyId: string) =>
     request<ApiKey>(`/auth/api-keys/${encodeURIComponent(keyId)}`, {
       method: "DELETE"

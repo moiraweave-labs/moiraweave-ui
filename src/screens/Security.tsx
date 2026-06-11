@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Plus, ShieldCheck, Trash2 } from "lucide-react";
+import { KeyRound, Plus, RotateCw, ShieldCheck, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { api } from "../api";
@@ -26,6 +26,12 @@ export function Security() {
       queryClient.invalidateQueries({ queryKey: ["api-keys"] });
     }
   });
+  const rotate = useMutation({
+    mutationFn: (keyId: string) => api.rotateApiKey(keyId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["api-keys"] });
+    }
+  });
   const revoke = useMutation({
     mutationFn: (keyId: string) => api.revokeApiKey(keyId),
     onSuccess: () => {
@@ -38,6 +44,8 @@ export function Security() {
     if (!canAdmin || !name.trim() || !subject.trim()) return;
     create.mutate();
   }
+
+  const oneTimeSecret = rotate.data || create.data;
 
   return (
     <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
@@ -100,19 +108,23 @@ export function Security() {
       </Panel>
 
       <div className="space-y-6">
-        {create.data && (
+        {oneTimeSecret && (
           <Panel title="One-Time Secret">
             <div className="space-y-3 p-5">
               <div className="flex items-center gap-2 text-xs text-amber-200">
                 <KeyRound className="h-4 w-4" />
-                <span className="font-semibold">{create.data.name}</span>
-                <StateBadge state={create.data.role} />
+                <span className="font-semibold">{oneTimeSecret.name}</span>
+                <StateBadge state={oneTimeSecret.role} />
               </div>
               <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
                 <code className="break-all font-mono text-xs text-amber-100">
-                  {create.data.secret}
+                  {oneTimeSecret.secret}
                 </code>
               </div>
+              <p className="text-xs leading-relaxed text-amber-100/80">
+                Store this value now. MoiraWeave keeps only the hashed key and
+                cannot show the secret again.
+              </p>
             </div>
           </Panel>
         )}
@@ -128,7 +140,7 @@ export function Security() {
                   <th className="px-5 py-3">Prefix</th>
                   <th className="px-5 py-3">Last Used</th>
                   <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3" />
+                  <th className="px-5 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/70">
@@ -155,15 +167,25 @@ export function Security() {
                     <td className="px-5 py-3">
                       <StateBadge state={item.revoked_at ? "revoked" : "active"} />
                     </td>
-                    <td className="px-5 py-3 text-right">
-                      <button
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-40"
-                        disabled={!canAdmin || Boolean(item.revoked_at) || revoke.isPending}
-                        onClick={() => revoke.mutate(item.key_id)}
-                        title="Revoke API key"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                    <td className="px-5 py-3">
+                      <div className="flex justify-end gap-2">
+                        <button
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 disabled:opacity-40"
+                          disabled={!canAdmin || Boolean(item.revoked_at) || rotate.isPending}
+                          onClick={() => rotate.mutate(item.key_id)}
+                          title="Rotate API key"
+                        >
+                          <RotateCw className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-40"
+                          disabled={!canAdmin || Boolean(item.revoked_at) || revoke.isPending}
+                          onClick={() => revoke.mutate(item.key_id)}
+                          title="Revoke API key"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -192,6 +214,11 @@ export function Security() {
           {revoke.error && (
             <div className="p-5">
               <ErrorMessage error={revoke.error} fallback="API key revoke failed." />
+            </div>
+          )}
+          {rotate.error && (
+            <div className="p-5">
+              <ErrorMessage error={rotate.error} fallback="API key rotation failed." />
             </div>
           )}
         </Panel>

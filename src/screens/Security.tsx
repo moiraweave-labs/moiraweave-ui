@@ -1,18 +1,46 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { KeyRound, Plus, RotateCw, ShieldCheck, Trash2 } from "lucide-react";
+import {
+  Building2,
+  KeyRound,
+  Plus,
+  RotateCw,
+  ShieldCheck,
+  Trash2,
+  UserCog,
+  UserPlus
+} from "lucide-react";
 import { useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
 import { api } from "../api";
 import { useAuthProfile } from "../auth";
-import { ErrorMessage, Panel, PermissionNotice, StateBadge } from "../components/common";
+import {
+  ErrorMessage,
+  Panel,
+  PermissionNotice,
+  RowMessage,
+  StateBadge
+} from "../components/common";
 import { formatDate } from "../utils";
+
+const ROLE_OPTIONS = ["operator", "viewer", "admin"];
 
 export function Security() {
   const { canAdmin } = useAuthProfile();
   const queryClient = useQueryClient();
-  const [name, setName] = useState("automation");
-  const [subject, setSubject] = useState("ci");
-  const [role, setRole] = useState("operator");
+  const [keyName, setKeyName] = useState("automation");
+  const [keySubject, setKeySubject] = useState("ci");
+  const [keyRole, setKeyRole] = useState("operator");
+  const [keyTeamId, setKeyTeamId] = useState("");
+  const [userSubject, setUserSubject] = useState("operator");
+  const [userDisplayName, setUserDisplayName] = useState("");
+  const [userPassword, setUserPassword] = useState("");
+  const [userRole, setUserRole] = useState("operator");
+  const [teamId, setTeamId] = useState("agents");
+  const [teamName, setTeamName] = useState("Agent Operators");
+  const [teamDescription, setTeamDescription] = useState("");
+  const [memberTeamId, setMemberTeamId] = useState("");
+  const [memberSubject, setMemberSubject] = useState("");
+  const [memberRole, setMemberRole] = useState("operator");
 
   const keys = useQuery({
     queryKey: ["api-keys"],
@@ -20,217 +48,677 @@ export function Security() {
     enabled: canAdmin,
     refetchInterval: 10000
   });
-  const create = useMutation({
-    mutationFn: () => api.createApiKey({ name, subject, role }),
+  const users = useQuery({
+    queryKey: ["users"],
+    queryFn: api.users,
+    enabled: canAdmin,
+    refetchInterval: 15000
+  });
+  const teams = useQuery({
+    queryKey: ["teams"],
+    queryFn: api.teams,
+    enabled: canAdmin,
+    refetchInterval: 15000
+  });
+  const teamMembers = useQuery({
+    queryKey: ["team-members", memberTeamId],
+    queryFn: () => api.teamMembers(memberTeamId),
+    enabled: canAdmin && Boolean(memberTeamId),
+    refetchInterval: 15000
+  });
+
+  const teamOptions = teams.data || [];
+  const selectedTeamId = memberTeamId || teamOptions[0]?.team_id || "";
+  const createKey = useMutation({
+    mutationFn: () =>
+      api.createApiKey({
+        name: keyName.trim(),
+        subject: keySubject.trim(),
+        role: keyRole,
+        team_id: keyTeamId.trim() || null
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["api-keys"] });
     }
   });
-  const rotate = useMutation({
+  const rotateKey = useMutation({
     mutationFn: (keyId: string) => api.rotateApiKey(keyId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["api-keys"] });
     }
   });
-  const revoke = useMutation({
+  const revokeKey = useMutation({
     mutationFn: (keyId: string) => api.revokeApiKey(keyId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["api-keys"] });
     }
   });
+  const createUser = useMutation({
+    mutationFn: () =>
+      api.createUser({
+        subject: userSubject.trim(),
+        password: userPassword,
+        role: userRole,
+        display_name: userDisplayName.trim() || null
+      }),
+    onSuccess: () => {
+      setUserPassword("");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    }
+  });
+  const disableUser = useMutation({
+    mutationFn: (subject: string) => api.disableUser(subject),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    }
+  });
+  const createTeam = useMutation({
+    mutationFn: () =>
+      api.createTeam({
+        team_id: teamId.trim(),
+        name: teamName.trim(),
+        description: teamDescription.trim() || null
+      }),
+    onSuccess: (team) => {
+      setMemberTeamId(team.team_id);
+      setKeyTeamId(team.team_id);
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+    }
+  });
+  const addMember = useMutation({
+    mutationFn: () =>
+      api.addTeamMember(selectedTeamId, {
+        subject: memberSubject.trim(),
+        role: memberRole
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-members"] });
+    }
+  });
+  const oneTimeSecret = rotateKey.data || createKey.data;
 
-  function submit(event: FormEvent) {
+  function submitKey(event: FormEvent) {
     event.preventDefault();
-    if (!canAdmin || !name.trim() || !subject.trim()) return;
-    create.mutate();
+    if (!canAdmin || !keyName.trim() || !keySubject.trim()) return;
+    createKey.mutate();
   }
 
-  const oneTimeSecret = rotate.data || create.data;
+  function submitUser(event: FormEvent) {
+    event.preventDefault();
+    if (!canAdmin || !userSubject.trim() || userPassword.length < 8) return;
+    createUser.mutate();
+  }
+
+  function submitTeam(event: FormEvent) {
+    event.preventDefault();
+    if (!canAdmin || !teamId.trim() || !teamName.trim()) return;
+    createTeam.mutate();
+  }
+
+  function submitMember(event: FormEvent) {
+    event.preventDefault();
+    if (!canAdmin || !selectedTeamId || !memberSubject.trim()) return;
+    addMember.mutate();
+  }
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[380px_1fr]">
-      <Panel title="Create API Key">
-        <form className="space-y-4 p-5" onSubmit={submit}>
-          {!canAdmin && (
-            <PermissionNotice minimumRole="admin" action="Managing API keys" />
-          )}
-          <div>
-            <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Name
-            </label>
-            <input
-              aria-label="API key name"
-              className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3.5 py-2 text-sm text-slate-200 outline-none focus:border-slate-700"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              disabled={!canAdmin}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Subject
-            </label>
-            <input
-              aria-label="API key subject"
-              className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3.5 py-2 text-sm text-slate-200 outline-none focus:border-slate-700"
-              value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-              disabled={!canAdmin}
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Role
-            </label>
-            <select
-              aria-label="API key role"
-              className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3.5 py-2 text-sm text-slate-200 outline-none focus:border-slate-700"
-              value={role}
-              onChange={(event) => setRole(event.target.value)}
-              disabled={!canAdmin}
-            >
-              <option value="operator">operator</option>
-              <option value="viewer">viewer</option>
-              <option value="admin">admin</option>
-            </select>
-          </div>
-          {create.error && (
-            <ErrorMessage error={create.error} fallback="API key creation failed." />
-          )}
-          <button
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/10 transition-colors hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
-            disabled={!canAdmin || create.isPending || !name.trim() || !subject.trim()}
-          >
-            <Plus className="h-4 w-4" />
-            Create Key
-          </button>
-        </form>
-      </Panel>
+    <div className="space-y-6">
+      {!canAdmin && (
+        <PermissionNotice minimumRole="admin" action="Security administration" />
+      )}
 
-      <div className="space-y-6">
-        {oneTimeSecret && (
-          <Panel title="One-Time Secret">
-            <div className="space-y-3 p-5">
-              <div className="flex items-center gap-2 text-xs text-amber-200">
-                <KeyRound className="h-4 w-4" />
-                <span className="font-semibold">{oneTimeSecret.name}</span>
-                <StateBadge state={oneTimeSecret.role} />
-              </div>
-              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
-                <code className="break-all font-mono text-xs text-amber-100">
-                  {oneTimeSecret.secret}
-                </code>
-              </div>
-              <p className="text-xs leading-relaxed text-amber-100/80">
-                Store this value now. MoiraWeave keeps only the hashed key and
-                cannot show the secret again.
-              </p>
-            </div>
+      <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
+        <div className="space-y-6">
+          <Panel title="Create User">
+            <form className="space-y-4 p-5" onSubmit={submitUser}>
+              <TextInput
+                disabled={!canAdmin}
+                label="Subject"
+                value={userSubject}
+                onChange={setUserSubject}
+                ariaLabel="User subject"
+              />
+              <TextInput
+                disabled={!canAdmin}
+                label="Display Name"
+                value={userDisplayName}
+                onChange={setUserDisplayName}
+                ariaLabel="User display name"
+              />
+              <TextInput
+                disabled={!canAdmin}
+                label="Password"
+                type="password"
+                value={userPassword}
+                onChange={setUserPassword}
+                ariaLabel="User password"
+              />
+              <RoleSelect
+                disabled={!canAdmin}
+                label="Role"
+                value={userRole}
+                onChange={setUserRole}
+                ariaLabel="User role"
+              />
+              {createUser.error && (
+                <ErrorMessage error={createUser.error} fallback="User creation failed." />
+              )}
+              <ActionButton
+                disabled={!canAdmin || createUser.isPending || !userSubject.trim() || userPassword.length < 8}
+                icon={<UserPlus className="h-4 w-4" />}
+                label="Create User"
+              />
+            </form>
           </Panel>
-        )}
 
-        <Panel title="API Keys">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-800 bg-[#0b0f19]/80 text-[10px] uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="px-5 py-3">Name</th>
-                  <th className="px-5 py-3">Subject</th>
-                  <th className="px-5 py-3">Role</th>
-                  <th className="px-5 py-3">Prefix</th>
-                  <th className="px-5 py-3">Last Used</th>
-                  <th className="px-5 py-3">Status</th>
-                  <th className="px-5 py-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/70">
-                {(keys.data || []).map((item) => (
-                  <tr key={item.key_id} className="hover:bg-slate-800/20">
-                    <td className="px-5 py-3">
-                      <div className="font-semibold text-slate-200">{item.name}</div>
-                      <div className="font-mono text-[10px] text-slate-500">
-                        {item.key_id}
-                      </div>
-                    </td>
-                    <td className="px-5 py-3 font-mono text-xs text-slate-300">
-                      {item.subject}
-                    </td>
-                    <td className="px-5 py-3">
-                      <StateBadge state={item.role} />
-                    </td>
-                    <td className="px-5 py-3 font-mono text-xs text-slate-500">
-                      {item.secret_prefix}
-                    </td>
-                    <td className="px-5 py-3 text-xs text-slate-400">
-                      {item.last_used_at ? formatDate(item.last_used_at) : "-"}
-                    </td>
-                    <td className="px-5 py-3">
-                      <StateBadge state={item.revoked_at ? "revoked" : "active"} />
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 disabled:opacity-40"
-                          disabled={!canAdmin || Boolean(item.revoked_at) || rotate.isPending}
-                          onClick={() => rotate.mutate(item.key_id)}
-                          title="Rotate API key"
-                        >
-                          <RotateCw className="h-3.5 w-3.5" />
-                        </button>
+          <Panel title="Create Team">
+            <form className="space-y-4 p-5" onSubmit={submitTeam}>
+              <TextInput
+                disabled={!canAdmin}
+                label="Team ID"
+                value={teamId}
+                onChange={setTeamId}
+                ariaLabel="Team ID"
+              />
+              <TextInput
+                disabled={!canAdmin}
+                label="Name"
+                value={teamName}
+                onChange={setTeamName}
+                ariaLabel="Team name"
+              />
+              <TextInput
+                disabled={!canAdmin}
+                label="Description"
+                value={teamDescription}
+                onChange={setTeamDescription}
+                ariaLabel="Team description"
+              />
+              {createTeam.error && (
+                <ErrorMessage error={createTeam.error} fallback="Team creation failed." />
+              )}
+              <ActionButton
+                disabled={!canAdmin || createTeam.isPending || !teamId.trim() || !teamName.trim()}
+                icon={<Building2 className="h-4 w-4" />}
+                label="Create Team"
+              />
+            </form>
+          </Panel>
+
+          <Panel title="Add Team Member">
+            <form className="space-y-4 p-5" onSubmit={submitMember}>
+              <TeamSelect
+                disabled={!canAdmin || !teamOptions.length}
+                label="Team"
+                value={selectedTeamId}
+                teams={teamOptions}
+                onChange={setMemberTeamId}
+                ariaLabel="Member team"
+              />
+              <TextInput
+                disabled={!canAdmin}
+                label="Subject"
+                value={memberSubject}
+                onChange={setMemberSubject}
+                ariaLabel="Member subject"
+              />
+              <RoleSelect
+                disabled={!canAdmin}
+                label="Role"
+                value={memberRole}
+                onChange={setMemberRole}
+                ariaLabel="Member role"
+              />
+              {addMember.error && (
+                <ErrorMessage error={addMember.error} fallback="Team member update failed." />
+              )}
+              <ActionButton
+                disabled={!canAdmin || addMember.isPending || !selectedTeamId || !memberSubject.trim()}
+                icon={<UserCog className="h-4 w-4" />}
+                label="Add Member"
+              />
+            </form>
+          </Panel>
+
+          <Panel title="Create API Key">
+            <form className="space-y-4 p-5" onSubmit={submitKey}>
+              <TextInput
+                disabled={!canAdmin}
+                label="Name"
+                value={keyName}
+                onChange={setKeyName}
+                ariaLabel="API key name"
+              />
+              <TextInput
+                disabled={!canAdmin}
+                label="Subject"
+                value={keySubject}
+                onChange={setKeySubject}
+                ariaLabel="API key subject"
+              />
+              <RoleSelect
+                disabled={!canAdmin}
+                label="Role"
+                value={keyRole}
+                onChange={setKeyRole}
+                ariaLabel="API key role"
+              />
+              <TeamSelect
+                allowEmpty
+                disabled={!canAdmin}
+                label="Team"
+                value={keyTeamId}
+                teams={teamOptions}
+                onChange={setKeyTeamId}
+                ariaLabel="API key team"
+              />
+              {createKey.error && (
+                <ErrorMessage error={createKey.error} fallback="API key creation failed." />
+              )}
+              <ActionButton
+                disabled={!canAdmin || createKey.isPending || !keyName.trim() || !keySubject.trim()}
+                icon={<Plus className="h-4 w-4" />}
+                label="Create Key"
+              />
+            </form>
+          </Panel>
+        </div>
+
+        <div className="space-y-6">
+          {oneTimeSecret && (
+            <Panel title="One-Time Secret">
+              <div className="space-y-3 p-5">
+                <div className="flex flex-wrap items-center gap-2 text-xs text-amber-200">
+                  <KeyRound className="h-4 w-4" />
+                  <span className="font-semibold">{oneTimeSecret.name}</span>
+                  <StateBadge state={oneTimeSecret.role} />
+                  {oneTimeSecret.team_id && <StateBadge state={oneTimeSecret.team_id} />}
+                </div>
+                <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 p-3">
+                  <code className="break-all font-mono text-xs text-amber-100">
+                    {oneTimeSecret.secret}
+                  </code>
+                </div>
+                <p className="text-xs leading-relaxed text-amber-100/80">
+                  Store this value now. MoiraWeave keeps only the hashed key and
+                  cannot show the secret again.
+                </p>
+              </div>
+            </Panel>
+          )}
+
+          <Panel title="Users">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <TableHead columns={["Subject", "Role", "Created", "Status", "Actions"]} />
+                <tbody className="divide-y divide-slate-800/70">
+                  {(users.data || []).map((item) => (
+                    <tr key={item.subject} className="hover:bg-slate-800/20">
+                      <td className="px-5 py-3">
+                        <div className="font-semibold text-slate-200">{item.subject}</div>
+                        {item.display_name && (
+                          <div className="text-xs text-slate-500">{item.display_name}</div>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        <StateBadge state={item.role} />
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-400">
+                        {formatDate(item.created_at)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <StateBadge state={item.disabled_at ? "disabled" : "active"} />
+                      </td>
+                      <td className="px-5 py-3 text-right">
                         <button
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-40"
-                          disabled={!canAdmin || Boolean(item.revoked_at) || revoke.isPending}
-                          onClick={() => revoke.mutate(item.key_id)}
-                          title="Revoke API key"
+                          disabled={!canAdmin || Boolean(item.disabled_at) || disableUser.isPending}
+                          onClick={() => disableUser.mutate(item.subject)}
+                          title="Disable user"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {keys.data && keys.data.length === 0 && (
-                  <tr>
-                    <td className="px-5 py-8 text-center text-xs text-slate-500" colSpan={7}>
-                      No API keys created
-                    </td>
-                  </tr>
-                )}
-                {!canAdmin && (
-                  <tr>
-                    <td className="px-5 py-8 text-center text-xs text-slate-500" colSpan={7}>
-                      Admin role required
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {keys.error && (
-            <div className="p-5">
-              <ErrorMessage error={keys.error} fallback="Unable to load API keys." />
+                      </td>
+                    </tr>
+                  ))}
+                  {users.data && users.data.length === 0 && (
+                    <RowMessage colSpan={5} text="No users created" />
+                  )}
+                  {!canAdmin && <RowMessage colSpan={5} text="Admin role required" />}
+                </tbody>
+              </table>
             </div>
-          )}
-          {revoke.error && (
-            <div className="p-5">
-              <ErrorMessage error={revoke.error} fallback="API key revoke failed." />
-            </div>
-          )}
-          {rotate.error && (
-            <div className="p-5">
-              <ErrorMessage error={rotate.error} fallback="API key rotation failed." />
-            </div>
-          )}
-        </Panel>
+            <PanelErrors errors={[users.error, disableUser.error]} fallback="Unable to load users." />
+          </Panel>
 
-        <Panel title="Access Model">
-          <div className="grid gap-3 p-5 md:grid-cols-3">
-            <AccessRole title="viewer" body="Read workloads, runs, sessions, health, and artifacts." />
-            <AccessRole title="operator" body="Submit runs, message agents, cancel work, and run operations." />
-            <AccessRole title="admin" body="Create workloads, inspect secrets, and manage API keys." />
-          </div>
-        </Panel>
+          <Panel title="Teams">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <TableHead columns={["Team", "Description", "Created", "Members"]} />
+                <tbody className="divide-y divide-slate-800/70">
+                  {(teams.data || []).map((item) => (
+                    <tr key={item.team_id} className="hover:bg-slate-800/20">
+                      <td className="px-5 py-3">
+                        <div className="font-semibold text-slate-200">{item.name}</div>
+                        <div className="font-mono text-[10px] text-slate-500">
+                          {item.team_id}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-400">
+                        {item.description || "-"}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-400">
+                        {formatDate(item.created_at)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <button
+                          className="rounded-lg border border-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800/50"
+                          onClick={() => setMemberTeamId(item.team_id)}
+                        >
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {teams.data && teams.data.length === 0 && (
+                    <RowMessage colSpan={4} text="No teams created" />
+                  )}
+                  {!canAdmin && <RowMessage colSpan={4} text="Admin role required" />}
+                </tbody>
+              </table>
+            </div>
+            <PanelErrors errors={[teams.error]} fallback="Unable to load teams." />
+          </Panel>
+
+          <Panel title={`Team Members${selectedTeamId ? `: ${selectedTeamId}` : ""}`}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <TableHead columns={["Subject", "Role", "Created By", "Created"]} />
+                <tbody className="divide-y divide-slate-800/70">
+                  {(teamMembers.data || []).map((item) => (
+                    <tr
+                      key={`${item.team_id}-${item.subject}`}
+                      className="hover:bg-slate-800/20"
+                    >
+                      <td className="px-5 py-3 font-mono text-xs text-slate-300">
+                        {item.subject}
+                      </td>
+                      <td className="px-5 py-3">
+                        <StateBadge state={item.role} />
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-400">
+                        {item.created_by}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-400">
+                        {formatDate(item.created_at)}
+                      </td>
+                    </tr>
+                  ))}
+                  {selectedTeamId && teamMembers.data?.length === 0 && (
+                    <RowMessage colSpan={4} text="No members in selected team" />
+                  )}
+                  {!selectedTeamId && <RowMessage colSpan={4} text="Select a team" />}
+                </tbody>
+              </table>
+            </div>
+            <PanelErrors
+              errors={[teamMembers.error]}
+              fallback="Unable to load team members."
+            />
+          </Panel>
+
+          <Panel title="API Keys">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <TableHead
+                  columns={[
+                    "Name",
+                    "Subject",
+                    "Role",
+                    "Team",
+                    "Prefix",
+                    "Last Used",
+                    "Status",
+                    "Actions"
+                  ]}
+                />
+                <tbody className="divide-y divide-slate-800/70">
+                  {(keys.data || []).map((item) => (
+                    <tr key={item.key_id} className="hover:bg-slate-800/20">
+                      <td className="px-5 py-3">
+                        <div className="font-semibold text-slate-200">{item.name}</div>
+                        <div className="font-mono text-[10px] text-slate-500">
+                          {item.key_id}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 font-mono text-xs text-slate-300">
+                        {item.subject}
+                      </td>
+                      <td className="px-5 py-3">
+                        <StateBadge state={item.role} />
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-400">
+                        {item.team_id || "-"}
+                      </td>
+                      <td className="px-5 py-3 font-mono text-xs text-slate-500">
+                        {item.secret_prefix}
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-400">
+                        {item.last_used_at ? formatDate(item.last_used_at) : "-"}
+                      </td>
+                      <td className="px-5 py-3">
+                        <StateBadge state={item.revoked_at ? "revoked" : "active"} />
+                      </td>
+                      <td className="px-5 py-3">
+                        <div className="flex justify-end gap-2">
+                          <button
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 disabled:opacity-40"
+                            disabled={!canAdmin || Boolean(item.revoked_at) || rotateKey.isPending}
+                            onClick={() => rotateKey.mutate(item.key_id)}
+                            title="Rotate API key"
+                          >
+                            <RotateCw className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-40"
+                            disabled={!canAdmin || Boolean(item.revoked_at) || revokeKey.isPending}
+                            onClick={() => revokeKey.mutate(item.key_id)}
+                            title="Revoke API key"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {keys.data && keys.data.length === 0 && (
+                    <RowMessage colSpan={8} text="No API keys created" />
+                  )}
+                  {!canAdmin && <RowMessage colSpan={8} text="Admin role required" />}
+                </tbody>
+              </table>
+            </div>
+            <PanelErrors
+              errors={[keys.error, revokeKey.error, rotateKey.error]}
+              fallback="Unable to load API keys."
+            />
+          </Panel>
+
+          <Panel title="Access Model">
+            <div className="grid gap-3 p-5 md:grid-cols-3">
+              <AccessRole
+                title="viewer"
+                body="Read workloads, runs, sessions, health, and artifacts."
+              />
+              <AccessRole
+                title="operator"
+                body="Submit runs, message agents, cancel work, and run operations."
+              />
+              <AccessRole
+                title="admin"
+                body="Create workloads, inspect secrets, and manage identity."
+              />
+            </div>
+          </Panel>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function TextInput({
+  ariaLabel,
+  disabled,
+  label,
+  onChange,
+  type = "text",
+  value
+}: {
+  ariaLabel: string;
+  disabled: boolean;
+  label: string;
+  onChange: (value: string) => void;
+  type?: string;
+  value: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        {label}
+      </label>
+      <input
+        aria-label={ariaLabel}
+        className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3.5 py-2 text-sm text-slate-200 outline-none focus:border-slate-700"
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
+function RoleSelect({
+  ariaLabel,
+  disabled,
+  label,
+  onChange,
+  value
+}: {
+  ariaLabel: string;
+  disabled: boolean;
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        {label}
+      </label>
+      <select
+        aria-label={ariaLabel}
+        className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3.5 py-2 text-sm text-slate-200 outline-none focus:border-slate-700"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+      >
+        {ROLE_OPTIONS.map((role) => (
+          <option key={role} value={role}>
+            {role}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function TeamSelect({
+  allowEmpty = false,
+  ariaLabel,
+  disabled,
+  label,
+  onChange,
+  teams,
+  value
+}: {
+  allowEmpty?: boolean;
+  ariaLabel: string;
+  disabled: boolean;
+  label: string;
+  onChange: (value: string) => void;
+  teams: Array<{ team_id: string; name: string }>;
+  value: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        {label}
+      </label>
+      <select
+        aria-label={ariaLabel}
+        className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3.5 py-2 text-sm text-slate-200 outline-none focus:border-slate-700"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
+      >
+        {allowEmpty && <option value="">No team</option>}
+        {teams.map((team) => (
+          <option key={team.team_id} value={team.team_id}>
+            {team.name} ({team.team_id})
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+function ActionButton({
+  disabled,
+  icon,
+  label
+}: {
+  disabled: boolean;
+  icon: ReactNode;
+  label: string;
+}) {
+  return (
+    <button
+      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-emerald-500/10 transition-colors hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600"
+      disabled={disabled}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function TableHead({ columns }: { columns: string[] }) {
+  return (
+    <thead className="border-b border-slate-800 bg-[#0b0f19]/80 text-[10px] uppercase tracking-wider text-slate-500">
+      <tr>
+        {columns.map((column) => (
+          <th key={column} className="px-5 py-3">
+            {column}
+          </th>
+        ))}
+      </tr>
+    </thead>
+  );
+}
+
+function PanelErrors({
+  errors,
+  fallback
+}: {
+  errors: unknown[];
+  fallback: string;
+}) {
+  const error = errors.find(Boolean);
+  if (!error) return null;
+  return (
+    <div className="p-5">
+      <ErrorMessage error={error} fallback={fallback} />
     </div>
   );
 }

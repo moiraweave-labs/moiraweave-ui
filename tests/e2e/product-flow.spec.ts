@@ -140,6 +140,9 @@ async function mockApi(page: Page) {
   const deploymentOperations: Array<Record<string, unknown>> = [];
   const deploymentOperationEvents: Record<string, Array<Record<string, unknown>>> = {};
   const apiKeys: Array<Record<string, unknown>> = [];
+  const users: Array<Record<string, unknown>> = [];
+  const teams: Array<Record<string, unknown>> = [];
+  const teamMembers: Record<string, Array<Record<string, unknown>>> = {};
 
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -183,7 +186,9 @@ async function mockApi(page: Page) {
         subject: "admin",
         role: "admin",
         credential_type: "jwt",
-        api_key_id: null
+        api_key_id: null,
+        team_id: null,
+        teams: []
       });
       return;
     }
@@ -198,12 +203,14 @@ async function mockApi(page: Page) {
         name: string;
         subject: string;
         role: string;
+        team_id?: string | null;
       };
       const key = {
         key_id: `key-${apiKeys.length + 1}`,
         name: body.name,
         subject: body.subject,
         role: body.role,
+        team_id: body.team_id ?? null,
         secret_prefix: "mwk_e2e...",
         created_by: "admin",
         created_at: "2026-05-26T08:00:00+00:00",
@@ -232,6 +239,7 @@ async function mockApi(page: Page) {
         name: key.name,
         subject: key.subject,
         role: key.role,
+        team_id: key.team_id ?? null,
         secret_prefix: "mwk_rot...",
         created_by: "admin",
         created_at: "2026-05-26T08:04:00+00:00",
@@ -252,6 +260,98 @@ async function mockApi(page: Page) {
       }
       key.revoked_at = "2026-05-26T08:03:00+00:00";
       await json(key);
+      return;
+    }
+
+    if (path === "/auth/users" && method === "GET") {
+      await json(users);
+      return;
+    }
+
+    if (path === "/auth/users" && method === "POST") {
+      const body = request.postDataJSON() as {
+        subject: string;
+        display_name?: string | null;
+        role: string;
+      };
+      const user = {
+        subject: body.subject,
+        display_name: body.display_name ?? null,
+        role: body.role,
+        created_by: "admin",
+        created_at: "2026-05-26T08:00:00+00:00",
+        updated_at: "2026-05-26T08:00:00+00:00",
+        disabled_at: null
+      };
+      const index = users.findIndex((item) => item.subject === body.subject);
+      if (index >= 0) users[index] = user;
+      else users.unshift(user);
+      await json(user, 201);
+      return;
+    }
+
+    if (path.startsWith("/auth/users/") && method === "DELETE") {
+      const subject = decodeURIComponent(path.split("/").pop() || "");
+      const user = users.find((item) => item.subject === subject);
+      if (!user) {
+        await json({ detail: "User not found" }, 404);
+        return;
+      }
+      user.disabled_at = "2026-05-26T08:09:00+00:00";
+      await json(user);
+      return;
+    }
+
+    if (path === "/auth/teams" && method === "GET") {
+      await json(teams);
+      return;
+    }
+
+    if (path === "/auth/teams" && method === "POST") {
+      const body = request.postDataJSON() as {
+        team_id: string;
+        name: string;
+        description?: string | null;
+      };
+      const team = {
+        team_id: body.team_id,
+        name: body.name,
+        description: body.description ?? null,
+        created_by: "admin",
+        created_at: "2026-05-26T08:00:00+00:00",
+        updated_at: "2026-05-26T08:00:00+00:00"
+      };
+      const index = teams.findIndex((item) => item.team_id === body.team_id);
+      if (index >= 0) teams[index] = team;
+      else teams.unshift(team);
+      teamMembers[body.team_id] ||= [];
+      await json(team, 201);
+      return;
+    }
+
+    const teamMembersMatch = path.match(/^\/auth\/teams\/([^/]+)\/members$/);
+    if (teamMembersMatch && method === "GET") {
+      await json(teamMembers[decodeURIComponent(teamMembersMatch[1])] || []);
+      return;
+    }
+
+    if (teamMembersMatch && method === "POST") {
+      const teamId = decodeURIComponent(teamMembersMatch[1]);
+      const body = request.postDataJSON() as { subject: string; role: string };
+      const member = {
+        team_id: teamId,
+        subject: body.subject,
+        role: body.role,
+        created_by: "admin",
+        created_at: "2026-05-26T08:00:00+00:00"
+      };
+      teamMembers[teamId] ||= [];
+      const index = teamMembers[teamId].findIndex(
+        (item) => item.subject === body.subject
+      );
+      if (index >= 0) teamMembers[teamId][index] = member;
+      else teamMembers[teamId].unshift(member);
+      await json(member, 201);
       return;
     }
 
@@ -347,6 +447,16 @@ async function mockApi(page: Page) {
 
     if (path === "/v1/deployments" && method === "GET") {
       await json([]);
+      return;
+    }
+
+    if (path === "/v1/environments" && method === "GET") {
+      await json([
+        { name: "local", deployment_count: 0, operation_count: 0, workload_count: 0 },
+        { name: "dev", deployment_count: 0, operation_count: 0, workload_count: 0 },
+        { name: "staging", deployment_count: 0, operation_count: 0, workload_count: 0 },
+        { name: "prod", deployment_count: 0, operation_count: 0, workload_count: 0 }
+      ]);
       return;
     }
 
@@ -901,15 +1011,37 @@ test("manages API keys from the security console", async ({ page }) => {
   await page.getByRole("button", { name: "Sign in" }).click();
 
   await page.getByRole("link", { name: "Security" }).click();
+  await expect(page.getByRole("heading", { name: "Create User" })).toBeVisible();
+  await page.getByLabel("User subject").fill("team-bot");
+  await page.getByLabel("User display name").fill("Team Bot");
+  await page.getByLabel("User password").fill("correct-horse");
+  await page.getByLabel("User role").selectOption("operator");
+  await page.getByRole("button", { name: "Create User" }).click();
+  await expect(page.getByRole("table").getByText("team-bot")).toBeVisible();
+
+  await page.getByLabel("Team ID").fill("agents");
+  await page.getByLabel("Team name").fill("Agent Operators");
+  await page.getByLabel("Team description").fill("Production agent operators");
+  await page.getByRole("button", { name: "Create Team" }).click();
+  await expect(
+    page.getByRole("table").getByText("Agent Operators", { exact: true })
+  ).toBeVisible();
+
+  await page.getByLabel("Member subject").fill("team-bot");
+  await page.getByLabel("Member role").selectOption("operator");
+  await page.getByRole("button", { name: "Add Member" }).click();
+  await expect(page.getByRole("table").getByText("team-bot").last()).toBeVisible();
+
   await expect(page.getByRole("heading", { name: "Create API Key" })).toBeVisible();
   await page.getByLabel("API key name").fill("ci deploy");
-  await page.getByLabel("API key subject").fill("ci");
+  await page.getByLabel("API key subject").fill("team-bot");
   await page.getByLabel("API key role").selectOption("operator");
+  await page.getByLabel("API key team").selectOption("agents");
   await page.getByRole("button", { name: "Create Key" }).click();
 
   await expect(page.getByText("mwk_e2e_created_secret")).toBeVisible();
   await expect(page.getByRole("table").getByText("ci deploy")).toBeVisible();
-  await expect(page.getByText("ci").first()).toBeVisible();
+  await expect(page.getByText("agents").first()).toBeVisible();
   await page.getByTitle("Rotate API key").click();
   await expect(page.getByText("mwk_e2e_rotated_secret")).toBeVisible();
   await expect(page.getByRole("table").getByText("revoked")).toBeVisible();

@@ -15,6 +15,8 @@ Redis, Postgres, Kubernetes, or agent runtimes.
   manifest registration
 - Role-aware controls for `viewer`, `operator`, and `admin` credentials resolved
   through `/auth/me`
+- Security console for persistent users, teams, team memberships, API keys,
+  rotation, revocation, and one-time team-scoped secrets
 - Run submission, run list, run detail, events, artifacts, and cancellation
 - Agent sessions and chat with first-session CTAs, run status, latest event, and
   artifact links
@@ -52,7 +54,8 @@ npm run test:e2e
 
 The Playwright suite mocks the API at the browser boundary and verifies the
 primary product loop: sign in, create a demo agent, start a session, send a
-message, follow run status, and inspect artifact metadata/content.
+message, follow run status, inspect artifact metadata/content, and manage
+security records.
 
 ## Build
 

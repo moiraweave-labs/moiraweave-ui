@@ -25,6 +25,8 @@ export function useAuthProfile() {
     profile,
     subject: profile.data?.subject,
     role: profile.data?.role,
+    teamId: profile.data?.team_id,
+    teams: profile.data?.teams || [],
     canOperate: roleAllows(profile.data?.role, "operator"),
     canAdmin: roleAllows(profile.data?.role, "admin")
   };

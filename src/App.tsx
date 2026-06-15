@@ -110,6 +110,11 @@ function Shell() {
                 {auth.profile.data?.credential_type === "api_key" && (
                   <KeyRound className="h-3.5 w-3.5 text-sky-400" />
                 )}
+                {auth.teamId && (
+                  <span className="rounded border border-sky-500/20 bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sky-300">
+                    {auth.teamId}
+                  </span>
+                )}
               </div>
             )}
             <div className="relative flex min-w-0 max-w-xl flex-1 items-center md:flex-none md:w-80">

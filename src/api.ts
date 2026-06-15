@@ -101,6 +101,8 @@ export type AuthProfile = {
   role: string;
   credential_type: string;
   api_key_id?: string | null;
+  team_id?: string | null;
+  teams: string[];
 };
 
 export type ApiKey = {
@@ -111,12 +113,47 @@ export type ApiKey = {
   secret_prefix: string;
   created_by: string;
   created_at: string;
+  team_id?: string | null;
   last_used_at?: string | null;
   revoked_at?: string | null;
 };
 
 export type ApiKeyCreateResponse = ApiKey & {
   secret: string;
+};
+
+export type UserAccount = {
+  subject: string;
+  display_name?: string | null;
+  role: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  disabled_at?: string | null;
+};
+
+export type Team = {
+  team_id: string;
+  name: string;
+  description?: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TeamMember = {
+  team_id: string;
+  subject: string;
+  role: string;
+  created_by: string;
+  created_at: string;
+};
+
+export type EnvironmentInfo = {
+  name: string;
+  deployment_count: number;
+  operation_count: number;
+  workload_count: number;
 };
 
 export type Deployment = {
@@ -294,7 +331,7 @@ export const api = {
     }),
   me: () => request<AuthProfile>("/auth/me"),
   apiKeys: () => request<ApiKey[]>("/auth/api-keys"),
-  createApiKey: (body: { name: string; subject: string; role: string }) =>
+  createApiKey: (body: { name: string; subject: string; role: string; team_id?: string | null }) =>
     request<ApiKeyCreateResponse>("/auth/api-keys", {
       method: "POST",
       body: JSON.stringify(body)
@@ -306,6 +343,34 @@ export const api = {
   revokeApiKey: (keyId: string) =>
     request<ApiKey>(`/auth/api-keys/${encodeURIComponent(keyId)}`, {
       method: "DELETE"
+    }),
+  users: () => request<UserAccount[]>("/auth/users"),
+  createUser: (body: {
+    subject: string;
+    password: string;
+    role: string;
+    display_name?: string | null;
+  }) =>
+    request<UserAccount>("/auth/users", {
+      method: "POST",
+      body: JSON.stringify(body)
+    }),
+  disableUser: (subject: string) =>
+    request<UserAccount>(`/auth/users/${encodeURIComponent(subject)}`, {
+      method: "DELETE"
+    }),
+  teams: () => request<Team[]>("/auth/teams"),
+  createTeam: (body: { team_id: string; name: string; description?: string | null }) =>
+    request<Team>("/auth/teams", {
+      method: "POST",
+      body: JSON.stringify(body)
+    }),
+  teamMembers: (teamId: string) =>
+    request<TeamMember[]>(`/auth/teams/${encodeURIComponent(teamId)}/members`),
+  addTeamMember: (teamId: string, body: { subject: string; role: string }) =>
+    request<TeamMember>(`/auth/teams/${encodeURIComponent(teamId)}/members`, {
+      method: "POST",
+      body: JSON.stringify(body)
     }),
   workloads: () => request<WorkloadInfo[]>("/v1/workloads"),
   workload: (name: string) => request<WorkloadInfo>(`/v1/workloads/${name}`),
@@ -332,6 +397,7 @@ export const api = {
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return request<Deployment[]>(`/v1/deployments${suffix}`);
   },
+  environments: () => request<EnvironmentInfo[]>("/v1/environments"),
   workloadHealth: (name: string, env?: string) =>
     request<WorkloadHealth>(
       `/v1/workloads/${name}/health${env ? `?env=${encodeURIComponent(env)}` : ""}`

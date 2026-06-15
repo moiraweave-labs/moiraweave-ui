@@ -8,7 +8,8 @@ import type {
   PreflightCheck,
   PreflightResponse,
   SecretInventory,
-  WorkloadHealth
+  WorkloadHealth,
+  WorkloadInfo
 } from "../api";
 import { formatDate, formatError } from "../utils";
 import { ErrorMessage, Metric, Panel, PermissionNotice, StateBadge } from "./common";
@@ -101,6 +102,172 @@ function EnvironmentMetric({ label, value }: { label: string; value: number }) {
       <div className="mt-1 font-mono text-xs text-slate-200">{value}</div>
     </div>
   );
+}
+
+export function CommandCompanionPanel({
+  workload,
+  target,
+  env,
+  deployment
+}: {
+  workload?: WorkloadInfo;
+  target: string;
+  env: string;
+  deployment?: Deployment;
+}) {
+  const workloadName = workload?.name || "<workload>";
+  const serviceName = deploymentServiceName(workload, deployment);
+  const commands = operationCommands({
+    workload,
+    workloadName,
+    serviceName,
+    target,
+    env
+  });
+  const notes = operationNotes({ workload, target });
+
+  return (
+    <div className="space-y-3 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+            Command Companion
+          </div>
+          <div className="mt-1 font-mono text-[10px] text-slate-500">
+            {workloadName} / {target}/{env || "unset"}
+          </div>
+        </div>
+        <StateBadge state={workload ? target : "select_workload"} />
+      </div>
+      {!workload && (
+        <div className="rounded border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-[11px] text-sky-100">
+          Select a workload to generate local, Kubernetes, or external runtime commands.
+        </div>
+      )}
+      <div className="space-y-2">
+        {commands.map((item) => (
+          <div key={item.command} className="rounded border border-slate-800 bg-[#050811] p-2">
+            <div className="mb-1 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              {item.label}
+            </div>
+            <code className="block whitespace-pre-wrap text-[10px] text-sky-300">
+              {item.command}
+            </code>
+          </div>
+        ))}
+      </div>
+      {notes.length > 0 && (
+        <div className="space-y-1">
+          {notes.map((note) => (
+            <div key={note} className="rounded border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+              {note}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type CommandItem = {
+  label: string;
+  command: string;
+};
+
+function operationCommands({
+  workload,
+  workloadName,
+  serviceName,
+  target,
+  env
+}: {
+  workload?: WorkloadInfo;
+  workloadName: string;
+  serviceName: string;
+  target: string;
+  env: string;
+}): CommandItem[] {
+  if (!workload) return [];
+  const commands: CommandItem[] = [
+    {
+      label: "Preflight",
+      command: `moira workload preflight ${workloadName} --target ${target} --env ${env || "local"}`
+    },
+    { label: "Status", command: `moira workload status ${workloadName}` }
+  ];
+
+  if (target === "kubernetes") {
+    commands.push(
+      {
+        label: "Generate And Register",
+        command: `moira deploy k8s --env ${env || "dev"} --register`
+      },
+      {
+        label: "Runtime Pods",
+        command: `kubectl get pods -n moiraweave -l moiraweave.io/workload=${workloadName}`
+      },
+      {
+        label: "Runtime Logs",
+        command: `kubectl logs -n moiraweave -l moiraweave.io/workload=${workloadName} --tail=200`
+      }
+    );
+    return commands;
+  }
+
+  if (target === "external") {
+    commands.push(
+      { label: "Register Manifest", command: `moira workload deploy ${workloadName}` },
+      { label: "List Environments", command: "moira env list" }
+    );
+    return commands;
+  }
+
+  commands.push(
+    { label: "Start Local Stack", command: "moira up" },
+    { label: "Generate And Register", command: "moira deploy local --register" },
+    { label: "Runtime Logs", command: `docker compose logs ${serviceName}` }
+  );
+  if (workload.type === "agent-service") {
+    commands.push({
+      label: "Agent Smoke Test",
+      command: `moira agent chat ${workloadName} "hello" --watch`
+    });
+  }
+  return commands;
+}
+
+function operationNotes({
+  workload,
+  target
+}: {
+  workload?: WorkloadInfo;
+  target: string;
+}): string[] {
+  if (!workload) return [];
+  const notes: string[] = [];
+  if (target === "external") {
+    notes.push("For external runtimes, verify the endpoint and credentials with the runtime owner, then use Record or Sync in Operations.");
+  }
+  if (workload.type === "agent-service") {
+    notes.push("MoiraWeave supervises sessions, runs, events, and artifacts; runtime tools stay inside the agent.");
+  }
+  return notes;
+}
+
+function deploymentServiceName(workload?: WorkloadInfo, deployment?: Deployment): string {
+  const metadataService = deployment?.metadata.service_name;
+  if (typeof metadataService === "string" && metadataService) return metadataService;
+  const spec = objectRecord(workload?.manifest.spec);
+  const deploymentSpec = objectRecord(spec.deployment);
+  const serviceName = deploymentSpec.serviceName;
+  if (typeof serviceName === "string" && serviceName) return serviceName;
+  return workload?.name || "<service>";
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 export function WorkloadHealthSummary({ health }: { health: WorkloadHealth }) {

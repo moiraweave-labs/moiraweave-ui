@@ -26,6 +26,7 @@ import { SAMPLE_DEPLOYMENT_METADATA } from "../constants";
 import { HealthTile, Panel, PermissionNotice, StateBadge } from "../components/common";
 import {
   AuditEventsPanel,
+  CommandCompanionPanel,
   DeploymentOperationSummary,
   DeploymentOperationsPanel,
   DeploymentPlanSummary,
@@ -576,6 +577,7 @@ export function Health() {
       deployment.target === target &&
       deployment.env === planEnv
   );
+  const selectedWorkload = (workloads.data || []).find((item) => item.name === workload);
 
   useEffect(() => {
     setPlan(null);
@@ -820,12 +822,20 @@ export function Health() {
               />
             )}
           </div>
-          <textarea
-            className="min-h-32 w-full resize-y rounded-lg border border-slate-900 bg-[#050811] p-4 font-mono text-[11px] text-emerald-400/90 outline-none focus:ring-1 focus:ring-slate-800"
-            value={metadataDraft}
-            onChange={(event) => setMetadataDraft(event.target.value)}
-            spellCheck={false}
-          />
+          <div className="space-y-3">
+            <CommandCompanionPanel
+              workload={selectedWorkload}
+              target={target}
+              env={planEnv}
+              deployment={currentDeployment}
+            />
+            <textarea
+              className="min-h-32 w-full resize-y rounded-lg border border-slate-900 bg-[#050811] p-4 font-mono text-[11px] text-emerald-400/90 outline-none focus:ring-1 focus:ring-slate-800"
+              value={metadataDraft}
+              onChange={(event) => setMetadataDraft(event.target.value)}
+              spellCheck={false}
+            />
+          </div>
         </div>
       </Panel>
       <DeploymentsPanel deployments={deployments.data || []} />

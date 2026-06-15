@@ -927,6 +927,11 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByRole("heading", { name: "Operations Center" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Environments" })).toBeVisible();
   await expect(page.getByText("moira env list")).toBeVisible();
+  await expect(page.getByText("Command Companion")).toBeVisible();
+  await expect(
+    page.getByText("moira workload preflight demo-agent --target local --env local")
+  ).toBeVisible();
+  await expect(page.getByText('moira agent chat demo-agent "hello" --watch')).toBeVisible();
   await expect(page.getByText("local", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Operational Snapshot")).toBeVisible();
   await expect(page.getByText("local/local", { exact: true }).first()).toBeVisible();

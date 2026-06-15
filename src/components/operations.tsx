@@ -4,6 +4,7 @@ import type {
   DeploymentOperation,
   DeploymentOperationEvent,
   DeploymentPlan,
+  EnvironmentInfo,
   PreflightCheck,
   PreflightResponse,
   SecretInventory,
@@ -11,6 +12,96 @@ import type {
 } from "../api";
 import { formatDate, formatError } from "../utils";
 import { ErrorMessage, Metric, Panel, PermissionNotice, StateBadge } from "./common";
+
+export function EnvironmentOverviewPanel({
+  environments,
+  selectedEnv,
+  isLoading,
+  error,
+  onSelect
+}: {
+  environments: EnvironmentInfo[];
+  selectedEnv: string;
+  isLoading: boolean;
+  error: unknown;
+  onSelect: (env: string) => void;
+}) {
+  return (
+    <Panel title="Environments">
+      <div className="space-y-4 p-5">
+        <div className="grid gap-3 md:grid-cols-4">
+          {isLoading && (
+            <div className="rounded-lg border border-slate-800 bg-[#050811] p-4 text-xs text-slate-500 md:col-span-4">
+              Loading environments...
+            </div>
+          )}
+          {!isLoading && environments.length === 0 && (
+            <div className="rounded-lg border border-slate-800 bg-[#050811] p-4 text-xs text-slate-500 md:col-span-4">
+              No environment records yet.
+            </div>
+          )}
+          {environments.map((environment) => {
+            const active = selectedEnv === environment.name;
+            const populated =
+              environment.workload_count +
+              environment.deployment_count +
+              environment.operation_count;
+            return (
+              <button
+                key={environment.name}
+                type="button"
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  active
+                    ? "border-emerald-500/40 bg-emerald-500/10"
+                    : "border-slate-800 bg-[#050811] hover:border-slate-700"
+                }`}
+                onClick={() => onSelect(environment.name)}
+              >
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <span className="font-mono text-xs font-semibold text-slate-200">
+                    {environment.name}
+                  </span>
+                  <StateBadge state={active ? "selected" : populated ? "active" : "empty"} />
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-[10px]">
+                  <EnvironmentMetric label="Workloads" value={environment.workload_count} />
+                  <EnvironmentMetric label="Deploys" value={environment.deployment_count} />
+                  <EnvironmentMetric label="Ops" value={environment.operation_count} />
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {Boolean(error) && (
+          <ErrorMessage error={error} fallback="Unable to load environments." />
+        )}
+        <div className="grid gap-2 rounded-lg border border-sky-500/20 bg-sky-500/10 p-3 text-[11px] text-sky-100 md:grid-cols-[1fr_auto]">
+          <div>
+            Use <span className="font-mono text-sky-200">local</span> for `moira up`,
+            and keep cluster or external runtimes in explicit environments such as
+            <span className="font-mono text-sky-200"> dev</span>,
+            <span className="font-mono text-sky-200"> staging</span>, or
+            <span className="font-mono text-sky-200"> prod</span>.
+          </div>
+          <code className="rounded border border-slate-800 bg-slate-950/70 px-2 py-1 text-[10px] text-sky-300">
+            moira env list
+          </code>
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function EnvironmentMetric({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded border border-slate-800 bg-slate-950/50 p-2">
+      <div className="text-[9px] font-bold uppercase tracking-wider text-slate-500">
+        {label}
+      </div>
+      <div className="mt-1 font-mono text-xs text-slate-200">{value}</div>
+    </div>
+  );
+}
 
 export function WorkloadHealthSummary({ health }: { health: WorkloadHealth }) {
   return (

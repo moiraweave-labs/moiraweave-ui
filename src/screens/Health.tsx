@@ -30,6 +30,7 @@ import {
   DeploymentOperationsPanel,
   DeploymentPlanSummary,
   DeploymentsPanel,
+  EnvironmentOverviewPanel,
   OperationError,
   OperationsSnapshot,
   PreflightActionGuide,
@@ -419,6 +420,11 @@ export function Health() {
     queryFn: () => api.deployments({ env: planEnv || undefined }),
     refetchInterval: 10000
   });
+  const environments = useQuery({
+    queryKey: ["environments"],
+    queryFn: api.environments,
+    refetchInterval: 15000
+  });
   const auditEvents = useQuery({
     queryKey: [
       "audit-events",
@@ -609,6 +615,13 @@ export function Health() {
         />
       </div>
       <PlatformChecks body={ready.data} />
+      <EnvironmentOverviewPanel
+        environments={environments.data || []}
+        selectedEnv={planEnv}
+        isLoading={environments.isLoading}
+        error={environments.error}
+        onSelect={setPlanEnv}
+      />
       <AgentOperationsPanel
         deployments={deployments.data || []}
         env={planEnv}

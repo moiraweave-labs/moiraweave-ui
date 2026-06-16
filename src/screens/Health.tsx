@@ -533,6 +533,7 @@ export function Health() {
         workload_name: workload,
         target,
         env: planEnv,
+        executor: target === "kubernetes" ? "controller" : "api",
         metadata: { source: "moiraweave-ui" }
       }),
     onSuccess: (response) => {
@@ -548,6 +549,7 @@ export function Health() {
         workload_name: workload,
         target,
         env: planEnv,
+        executor: target === "kubernetes" ? "controller" : "api",
         metadata: { source: "moiraweave-ui" }
       }),
     onSuccess: (response) => {

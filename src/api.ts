@@ -432,6 +432,7 @@ export const api = {
     workload_name: string;
     target: string;
     env?: string;
+    executor?: string;
     metadata?: Record<string, unknown>;
   }) =>
     request<DeploymentOperation>("/v1/deployment-operations", {

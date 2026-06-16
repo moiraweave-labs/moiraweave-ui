@@ -739,6 +739,7 @@ export function Health() {
             <div>
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Workload</label>
               <select
+                aria-label="Workload"
                 className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
                 value={workload}
                 onChange={(event) => selectWorkload(event.target.value)}
@@ -754,6 +755,7 @@ export function Health() {
             <div>
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Target</label>
               <select
+                aria-label="Target"
                 className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
                 value={target}
                 onChange={(event) => setTarget(event.target.value)}
@@ -793,6 +795,7 @@ export function Health() {
             <div>
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Status</label>
               <select
+                aria-label="Status"
                 className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
                 value={status}
                 onChange={(event) => setStatus(event.target.value)}

@@ -468,6 +468,7 @@ async function mockApi(page: Page) {
     if (path === "/v1/deployment-operations" && method === "POST") {
       const payload = await request.postDataJSON();
       const operationId = `operation-${deploymentOperations.length + 1}`;
+      const usesController = payload.executor === "controller";
       const plan = {
         workload_name: payload.workload_name,
         target: payload.target || "local",
@@ -486,12 +487,20 @@ async function mockApi(page: Page) {
         workload_name: payload.workload_name,
         target: payload.target || "local",
         env: payload.env || "local",
-        status: "succeeded",
+        status: usesController ? "queued" : "succeeded",
         user: "admin",
         created_at: "2026-05-26T08:02:00+00:00",
         updated_at: "2026-05-26T08:02:00+00:00",
-        completed_at: "2026-05-26T08:02:00+00:00",
-        metadata: { plan }
+        completed_at: usesController ? null : "2026-05-26T08:02:00+00:00",
+        metadata: usesController
+          ? {
+              plan,
+              executor: "controller",
+              controller_required: true,
+              action_commands: ["helm upgrade --install moiraweave infra/helm/moiraweave"],
+              next_actions: ["Run the CLI deployment controller from a trusted shell."]
+            }
+          : { plan }
       };
       deploymentOperations.unshift(operation);
       deploymentOperationEvents[operationId] = [
@@ -499,8 +508,10 @@ async function mockApi(page: Page) {
           id: "event-plan-1",
           operation_id: operationId,
           timestamp: "2026-05-26T08:02:00+00:00",
-          type: "operation.plan",
-          message: "Deployment plan generated.",
+          type: usesController ? "operation.queued" : "operation.plan",
+          message: usesController
+            ? "Deployment operation queued for a deployment controller."
+            : "Deployment plan generated.",
           data: { plan }
         }
       ];
@@ -1009,6 +1020,34 @@ test("guides real agent preflight blockers with concrete next actions", async ({
   await expect(guide.getByText("Sync Deployment Record")).toBeVisible();
   await expect(guide.getByText("moira deploy local --register")).toBeVisible();
   await expect(page.getByText("No local/local deployment record exists for hermes.")).toBeVisible();
+});
+
+test("queues kubernetes deployment operations for the cli controller", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.getByLabel("Workload template").selectOption("hermes");
+  await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByText("Created hermes")).toBeVisible();
+
+  await page.goto("/operations?workload=hermes");
+  await page.getByLabel("Target").selectOption("kubernetes");
+  await page.getByRole("button", { name: "Apply" }).click();
+
+  await expect(page.getByRole("heading", { name: "Controller Queue" })).toBeVisible();
+  await expect(
+    page.getByText("moira deploy controller run --target kubernetes --env local --watch")
+  ).toBeVisible();
+  await expect(page.getByText("set MOIRA_TOKEN outside the browser")).toBeVisible();
+  await expect(
+    page.getByText("Deployment operation queued for a deployment controller.")
+  ).toBeVisible();
+  await expect(
+    page.getByText("helm upgrade --install moiraweave infra/helm/moiraweave")
+  ).toBeVisible();
 });
 
 test("manages API keys from the security console", async ({ page }) => {

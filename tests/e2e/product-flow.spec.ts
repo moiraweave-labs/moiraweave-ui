@@ -1041,7 +1041,14 @@ test("queues kubernetes deployment operations for the cli controller", async ({ 
   await expect(
     page.getByText("moira deploy controller run --target kubernetes --env local --watch")
   ).toBeVisible();
-  await expect(page.getByText("set MOIRA_TOKEN outside the browser")).toBeVisible();
+  await expect(
+    page.getByText("kubectl create secret generic moiraweave-controller-token")
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "helm upgrade --install moiraweave oci://ghcr.io/moiraweave-labs/charts/moiraweave"
+    )
+  ).toBeVisible();
   await expect(
     page.getByText("Deployment operation queued for a deployment controller.")
   ).toBeVisible();

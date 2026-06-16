@@ -988,7 +988,10 @@ export function ControllerQueuePanel({
   const running = controllerOperations.filter((operation) => operation.status === "running");
   const controllerTarget = target || controllerOperations[0]?.target || "kubernetes";
   const controllerEnv = env || controllerOperations[0]?.env || "dev";
-  const command = `moira deploy controller run --target ${controllerTarget} --env ${controllerEnv} --watch`;
+  const namespace = controllerEnv === "local" ? "moiraweave" : `moiraweave-${controllerEnv}`;
+  const cliCommand = `moira deploy controller run --target ${controllerTarget} --env ${controllerEnv} --watch`;
+  const secretCommand = `kubectl create secret generic moiraweave-controller-token --from-literal=MOIRA_TOKEN=<admin-token> --namespace ${namespace}`;
+  const helmCommand = `helm upgrade --install moiraweave oci://ghcr.io/moiraweave-labs/charts/moiraweave --namespace ${namespace} --create-namespace --set deploymentController.enabled=true`;
 
   return (
     <Panel title="Controller Queue">
@@ -1001,15 +1004,12 @@ export function ControllerQueuePanel({
         <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 p-3 text-[11px] text-sky-100">
           <div>
             Kubernetes Apply, Logs, and Undeploy operations stay queued until a CLI
-            controller with cluster credentials processes them.
+            controller or in-cluster controller processes them.
           </div>
-          <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto] md:items-center">
-            <code className="whitespace-pre-wrap rounded border border-slate-800 bg-slate-950/70 px-2 py-1 text-[10px] text-sky-300">
-              {command}
-            </code>
-            <span className="text-[10px] text-sky-200">
-              set MOIRA_TOKEN outside the browser
-            </span>
+          <div className="mt-3 grid gap-2">
+            <ControllerCommand label="Operator shell" command={cliCommand} />
+            <ControllerCommand label="Token secret" command={secretCommand} />
+            <ControllerCommand label="In-cluster controller" command={helmCommand} />
           </div>
         </div>
         <div className="divide-y divide-slate-800/50 rounded-lg border border-slate-800 bg-[#050811]">
@@ -1037,6 +1037,19 @@ export function ControllerQueuePanel({
         </div>
       </div>
     </Panel>
+  );
+}
+
+function ControllerCommand({ label, command }: { label: string; command: string }) {
+  return (
+    <div className="grid gap-1 md:grid-cols-[130px_1fr] md:items-start">
+      <span className="text-[10px] font-semibold uppercase text-sky-200">
+        {label}
+      </span>
+      <code className="whitespace-pre-wrap break-words rounded border border-slate-800 bg-slate-950/70 px-2 py-1 text-[10px] text-sky-300">
+        {command}
+      </code>
+    </div>
   );
 }
 

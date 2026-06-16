@@ -445,6 +445,7 @@ export const api = {
     env?: string;
     status?: string;
     action?: string;
+    scope?: string;
   } = {}) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {

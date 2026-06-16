@@ -968,6 +968,86 @@ export function DeploymentOperationsPanel({
   );
 }
 
+export function ControllerQueuePanel({
+  operations,
+  target,
+  env,
+  onSelect
+}: {
+  operations: DeploymentOperation[];
+  target: string;
+  env: string;
+  onSelect: (operation: DeploymentOperation) => void;
+}) {
+  const controllerOperations = operations.filter(
+    (operation) =>
+      isControllerOperation(operation) &&
+      ["queued", "running"].includes(operation.status)
+  );
+  const queued = controllerOperations.filter((operation) => operation.status === "queued");
+  const running = controllerOperations.filter((operation) => operation.status === "running");
+  const controllerTarget = target || controllerOperations[0]?.target || "kubernetes";
+  const controllerEnv = env || controllerOperations[0]?.env || "dev";
+  const command = `moira deploy controller run --target ${controllerTarget} --env ${controllerEnv} --watch`;
+
+  return (
+    <Panel title="Controller Queue">
+      <div className="space-y-4 p-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          <Metric label="Queued" value={<span className="font-mono text-slate-300">{queued.length}</span>} />
+          <Metric label="Running" value={<span className="font-mono text-slate-300">{running.length}</span>} />
+          <Metric label="Target / Env" value={<span className="text-slate-300">{controllerTarget} / {controllerEnv}</span>} />
+        </div>
+        <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 p-3 text-[11px] text-sky-100">
+          <div>
+            Kubernetes Apply, Logs, and Undeploy operations stay queued until a CLI
+            controller with cluster credentials processes them.
+          </div>
+          <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto] md:items-center">
+            <code className="whitespace-pre-wrap rounded border border-slate-800 bg-slate-950/70 px-2 py-1 text-[10px] text-sky-300">
+              {command}
+            </code>
+            <span className="text-[10px] text-sky-200">
+              set MOIRA_TOKEN outside the browser
+            </span>
+          </div>
+        </div>
+        <div className="divide-y divide-slate-800/50 rounded-lg border border-slate-800 bg-[#050811]">
+          {controllerOperations.map((operation) => (
+            <button
+              key={operation.operation_id}
+              type="button"
+              className="grid w-full gap-3 p-3 text-left text-xs transition-colors hover:bg-slate-800/30 md:grid-cols-[90px_1fr_80px_80px_120px]"
+              onClick={() => onSelect(operation)}
+            >
+              <span className="font-mono text-[10px] font-semibold text-sky-300">
+                {operation.operation_id.slice(0, 8)}
+              </span>
+              <span className="font-semibold text-slate-200">{operation.workload_name}</span>
+              <span className="text-slate-400">{operation.action}</span>
+              <StateBadge state={operation.status} />
+              <span className="text-[10px] text-slate-500">{formatDate(operation.updated_at || operation.created_at)}</span>
+            </button>
+          ))}
+          {controllerOperations.length === 0 && (
+            <div className="p-4 text-center text-xs text-slate-500">
+              No queued or running controller operations for the selected filters.
+            </div>
+          )}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function isControllerOperation(operation: DeploymentOperation): boolean {
+  return (
+    operation.metadata.executor === "controller" ||
+    operation.metadata.controller_required === true ||
+    typeof operation.metadata.controller === "object"
+  );
+}
+
 export type AuditEventFilters = {
   action: string;
   resourceType: string;

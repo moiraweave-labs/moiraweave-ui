@@ -27,6 +27,7 @@ import { HealthTile, Panel, PermissionNotice, StateBadge } from "../components/c
 import {
   AuditEventsPanel,
   CommandCompanionPanel,
+  ControllerQueuePanel,
   DeploymentOperationSummary,
   DeploymentOperationsPanel,
   DeploymentPlanSummary,
@@ -443,11 +444,19 @@ export function Health() {
     refetchInterval: 15000
   });
   const deploymentOperations = useQuery({
-    queryKey: ["deployment-operations", workload || "all", planEnv],
+    queryKey: [
+      "deployment-operations",
+      workload || "all",
+      target,
+      planEnv,
+      canAdmin ? "all" : "mine"
+    ],
     queryFn: () =>
       api.deploymentOperations({
         workload_name: workload || undefined,
-        env: planEnv || undefined
+        target,
+        env: planEnv || undefined,
+        scope: canAdmin ? "all" : undefined
       }),
     refetchInterval: 10000
   });
@@ -472,7 +481,9 @@ export function Health() {
   const operationEvents = useQuery({
     queryKey: ["deployment-operation-events", operation?.operation_id],
     queryFn: () => api.deploymentOperationEvents(operation!.operation_id),
-    enabled: Boolean(operation)
+    enabled: Boolean(operation),
+    refetchInterval:
+      operation && ["queued", "running"].includes(operation.status) ? 3000 : false
   });
   const preflightMutation = useMutation({
     mutationFn: () => api.preflight(workload, target, planEnv),
@@ -592,6 +603,27 @@ export function Health() {
       setWorkload(requestedWorkload);
     }
   }, [requestedWorkload, workload]);
+
+  useEffect(() => {
+    if (!operation) return;
+    const latest = (deploymentOperations.data || []).find(
+      (item) => item.operation_id === operation.operation_id
+    );
+    if (!latest) return;
+    if (
+      latest.status !== operation.status ||
+      latest.updated_at !== operation.updated_at ||
+      latest.completed_at !== operation.completed_at
+    ) {
+      setOperation(latest);
+    }
+  }, [
+    deploymentOperations.data,
+    operation?.completed_at,
+    operation?.operation_id,
+    operation?.status,
+    operation?.updated_at
+  ]);
 
   function selectWorkload(nextWorkload: string) {
     const nextParams = new URLSearchParams(searchParams);
@@ -840,6 +872,14 @@ export function Health() {
           </div>
         </div>
       </Panel>
+      {target === "kubernetes" && (
+        <ControllerQueuePanel
+          operations={deploymentOperations.data || []}
+          target={target}
+          env={planEnv}
+          onSelect={setOperation}
+        />
+      )}
       <DeploymentsPanel deployments={deployments.data || []} />
       <DeploymentOperationsPanel
         operations={deploymentOperations.data || []}

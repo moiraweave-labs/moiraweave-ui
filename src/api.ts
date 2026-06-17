@@ -260,6 +260,12 @@ export type DeploymentOperation = {
   created_at: string;
   updated_at?: string | null;
   completed_at?: string | null;
+  lease_expires_at?: string | null;
+  controller_id?: string | null;
+  heartbeat_at?: string | null;
+  timeout_seconds?: number | null;
+  stdout_summary?: string | null;
+  stderr_summary?: string | null;
   metadata: Record<string, unknown>;
 };
 

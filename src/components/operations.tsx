@@ -853,6 +853,8 @@ export function DeploymentOperationSummary({
     ...commandList(operation.metadata.action_commands)
   ];
   const nextActions = commandList(operation.metadata.next_actions);
+  const hasControllerState =
+    operation.controller_id || operation.heartbeat_at || operation.lease_expires_at;
   return (
     <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
       <div className="grid gap-2 sm:grid-cols-3">
@@ -860,9 +862,39 @@ export function DeploymentOperationSummary({
         <Metric label="Action" value={<span className="text-slate-300">{operation.action}</span>} />
         <Metric label="Status" value={<StateBadge state={operation.status} />} />
       </div>
+      {hasControllerState && (
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Metric
+            label="Controller"
+            value={
+              <span className="break-all font-mono text-[10px] text-slate-300">
+                {operation.controller_id || "-"}
+              </span>
+            }
+          />
+          <Metric
+            label="Heartbeat"
+            value={<span className="text-slate-300">{formatDate(operation.heartbeat_at)}</span>}
+          />
+          <Metric
+            label="Lease Expires"
+            value={<span className="text-slate-300">{formatDate(operation.lease_expires_at)}</span>}
+          />
+        </div>
+      )}
       {typeof operation.metadata.blocked_reason === "string" && (
         <div className="rounded border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
           {operation.metadata.blocked_reason}
+        </div>
+      )}
+      {(operation.stdout_summary || operation.stderr_summary) && (
+        <div className="grid gap-2 md:grid-cols-2">
+          {operation.stdout_summary && (
+            <OperationOutput title="Stdout" body={operation.stdout_summary} tone="sky" />
+          )}
+          {operation.stderr_summary && (
+            <OperationOutput title="Stderr" body={operation.stderr_summary} tone="amber" />
+          )}
         </div>
       )}
       {commands.length > 0 && (
@@ -892,6 +924,28 @@ export function DeploymentOperationSummary({
           {event.message}
         </div>
       ))}
+    </div>
+  );
+}
+
+function OperationOutput({
+  title,
+  body,
+  tone
+}: {
+  title: string;
+  body: string;
+  tone: "sky" | "amber";
+}) {
+  const toneClass = tone === "sky" ? "text-sky-300" : "text-amber-300";
+  return (
+    <div className="space-y-1">
+      <span className={`block text-[10px] font-bold uppercase tracking-wider ${toneClass}`}>
+        {title}
+      </span>
+      <code className="block max-h-40 overflow-auto whitespace-pre-wrap rounded border border-slate-800 bg-[#050811] px-2 py-1 text-[10px] text-slate-300">
+        {body}
+      </code>
     </div>
   );
 }
@@ -1017,7 +1071,7 @@ export function ControllerQueuePanel({
             <button
               key={operation.operation_id}
               type="button"
-              className="grid w-full gap-3 p-3 text-left text-xs transition-colors hover:bg-slate-800/30 md:grid-cols-[90px_1fr_80px_80px_120px]"
+              className="grid w-full gap-3 p-3 text-left text-xs transition-colors hover:bg-slate-800/30 md:grid-cols-[90px_1fr_80px_80px_120px_120px]"
               onClick={() => onSelect(operation)}
             >
               <span className="font-mono text-[10px] font-semibold text-sky-300">
@@ -1027,6 +1081,9 @@ export function ControllerQueuePanel({
               <span className="text-slate-400">{operation.action}</span>
               <StateBadge state={operation.status} />
               <span className="text-[10px] text-slate-500">{formatDate(operation.updated_at || operation.created_at)}</span>
+              <span className="truncate font-mono text-[10px] text-slate-500">
+                {operation.controller_id || "-"}
+              </span>
             </button>
           ))}
           {controllerOperations.length === 0 && (

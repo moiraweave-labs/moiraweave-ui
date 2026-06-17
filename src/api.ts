@@ -263,6 +263,20 @@ export type DeploymentOperation = {
   metadata: Record<string, unknown>;
 };
 
+export type OperationsAlert = {
+  id: string;
+  severity: "info" | "warning" | "critical" | string;
+  title: string;
+  detail: string;
+  action: string;
+  resource_type: string;
+  resource_id?: string | null;
+  env?: string | null;
+  count: number;
+  command?: string | null;
+  metadata: Record<string, unknown>;
+};
+
 export type DeploymentOperationEvent = {
   id: string;
   operation_id: string;
@@ -461,6 +475,14 @@ export const api = {
   },
   deploymentOperationEvents: (id: string) =>
     request<DeploymentOperationEvent[]>(`/v1/deployment-operations/${id}/events`),
+  operationsAlerts: (filters: { env?: string; scope?: string } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return request<OperationsAlert[]>(`/v1/operations/alerts${suffix}`);
+  },
   auditEvents: (filters: {
     action?: string;
     resource_type?: string;

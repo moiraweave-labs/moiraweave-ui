@@ -460,6 +460,11 @@ async function mockApi(page: Page) {
       return;
     }
 
+    if (path === "/v1/operations/alerts" && method === "GET") {
+      await json([]);
+      return;
+    }
+
     if (path === "/v1/deployment-operations" && method === "GET") {
       await json(deploymentOperations);
       return;

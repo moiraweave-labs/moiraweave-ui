@@ -17,6 +17,7 @@ import type {
   Deployment,
   DeploymentOperation,
   DeploymentPlan,
+  OperationsAlert,
   PreflightResponse,
   RunStatus,
   WorkloadInfo
@@ -117,6 +118,73 @@ function PlatformChecks({ body }: { body: unknown }) {
             </div>
           );
         })}
+      </div>
+    </Panel>
+  );
+}
+
+function OperationsAlertsPanel({
+  alerts,
+  error,
+  isLoading
+}: {
+  alerts: OperationsAlert[];
+  error: unknown;
+  isLoading: boolean;
+}) {
+  return (
+    <Panel title="Operations Alerts">
+      <div className="divide-y divide-slate-900">
+        {isLoading && (
+          <div className="px-5 py-6 text-xs text-slate-500">
+            Loading operations alerts...
+          </div>
+        )}
+        {!isLoading && Boolean(error) && (
+          <div className="px-5 py-6 text-xs text-rose-300">
+            Unable to load operations alerts.
+          </div>
+        )}
+        {!isLoading && !error && alerts.length === 0 && (
+          <div className="px-5 py-6 text-xs text-slate-500">
+            No actionable platform alerts for the selected environment.
+          </div>
+        )}
+        {!isLoading &&
+          !error &&
+          alerts.map((alert) => (
+            <div
+              key={alert.id}
+              className="grid gap-3 px-5 py-4 text-xs xl:grid-cols-[160px_1fr_260px]"
+            >
+              <div className="space-y-2">
+                <StateBadge state={alert.severity} />
+                <div className="text-[11px] text-slate-500">
+                  {alert.resource_type}
+                  {alert.count > 1 ? ` (${alert.count})` : ""}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="font-semibold text-slate-100">{alert.title}</div>
+                <div className="text-slate-400">{alert.detail}</div>
+                <div className="rounded border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-100">
+                  {alert.action}
+                </div>
+              </div>
+              <div className="space-y-2">
+                {alert.command ? (
+                  <code className="block rounded border border-slate-800 bg-slate-950/70 px-3 py-2 font-mono text-[11px] text-emerald-300">
+                    {alert.command}
+                  </code>
+                ) : (
+                  <div className="text-[11px] text-slate-500">No CLI action needed.</div>
+                )}
+                {alert.env && (
+                  <div className="text-[11px] text-slate-500">Environment: {alert.env}</div>
+                )}
+              </div>
+            </div>
+          ))}
       </div>
     </Panel>
   );
@@ -457,6 +525,15 @@ export function Health() {
         target,
         env: planEnv || undefined,
         scope: canAdmin ? "all" : undefined
+    }),
+    refetchInterval: 10000
+  });
+  const operationsAlerts = useQuery({
+    queryKey: ["operations-alerts", planEnv, canAdmin ? "all" : "mine"],
+    queryFn: () =>
+      api.operationsAlerts({
+        env: planEnv || undefined,
+        scope: canAdmin ? "all" : undefined
       }),
     refetchInterval: 10000
   });
@@ -657,6 +734,11 @@ export function Health() {
         isLoading={environments.isLoading}
         error={environments.error}
         onSelect={setPlanEnv}
+      />
+      <OperationsAlertsPanel
+        alerts={operationsAlerts.data || []}
+        isLoading={operationsAlerts.isLoading}
+        error={operationsAlerts.error}
       />
       <AgentOperationsPanel
         deployments={deployments.data || []}

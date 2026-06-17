@@ -372,6 +372,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body)
     }),
+  removeTeamMember: (teamId: string, subject: string) =>
+    request<TeamMember>(
+      `/auth/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(subject)}`,
+      { method: "DELETE" }
+    ),
   workloads: () => request<WorkloadInfo[]>("/v1/workloads"),
   workload: (name: string) => request<WorkloadInfo>(`/v1/workloads/${name}`),
   templates: () => request<WorkloadTemplate[]>("/v1/templates"),

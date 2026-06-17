@@ -60,15 +60,15 @@ export function Security() {
     enabled: canAdmin,
     refetchInterval: 15000
   });
+  const teamOptions = teams.data || [];
+  const selectedTeamId = memberTeamId || teamOptions[0]?.team_id || "";
   const teamMembers = useQuery({
-    queryKey: ["team-members", memberTeamId],
-    queryFn: () => api.teamMembers(memberTeamId),
-    enabled: canAdmin && Boolean(memberTeamId),
+    queryKey: ["team-members", selectedTeamId],
+    queryFn: () => api.teamMembers(selectedTeamId),
+    enabled: canAdmin && Boolean(selectedTeamId),
     refetchInterval: 15000
   });
 
-  const teamOptions = teams.data || [];
-  const selectedTeamId = memberTeamId || teamOptions[0]?.team_id || "";
   const createKey = useMutation({
     mutationFn: () =>
       api.createApiKey({
@@ -131,6 +131,13 @@ export function Security() {
         subject: memberSubject.trim(),
         role: memberRole
       }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["team-members"] });
+    }
+  });
+  const removeMember = useMutation({
+    mutationFn: (member: { teamId: string; subject: string }) =>
+      api.removeTeamMember(member.teamId, member.subject),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["team-members"] });
     }
@@ -433,7 +440,7 @@ export function Security() {
           <Panel title={`Team Members${selectedTeamId ? `: ${selectedTeamId}` : ""}`}>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <TableHead columns={["Subject", "Role", "Created By", "Created"]} />
+                <TableHead columns={["Subject", "Role", "Created By", "Created", "Actions"]} />
                 <tbody className="divide-y divide-slate-800/70">
                   {(teamMembers.data || []).map((item) => (
                     <tr
@@ -452,17 +459,32 @@ export function Security() {
                       <td className="px-5 py-3 text-xs text-slate-400">
                         {formatDate(item.created_at)}
                       </td>
+                      <td className="px-5 py-3 text-right">
+                        <button
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-40"
+                          disabled={!canAdmin || removeMember.isPending}
+                          onClick={() =>
+                            removeMember.mutate({
+                              teamId: item.team_id,
+                              subject: item.subject
+                            })
+                          }
+                          title="Remove team member"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {selectedTeamId && teamMembers.data?.length === 0 && (
-                    <RowMessage colSpan={4} text="No members in selected team" />
+                    <RowMessage colSpan={5} text="No members in selected team" />
                   )}
-                  {!selectedTeamId && <RowMessage colSpan={4} text="Select a team" />}
+                  {!selectedTeamId && <RowMessage colSpan={5} text="Select a team" />}
                 </tbody>
               </table>
             </div>
             <PanelErrors
-              errors={[teamMembers.error]}
+              errors={[teamMembers.error, removeMember.error]}
               fallback="Unable to load team members."
             />
           </Panel>

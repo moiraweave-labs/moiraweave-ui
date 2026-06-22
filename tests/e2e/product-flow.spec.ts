@@ -811,6 +811,20 @@ async function mockApi(page: Page) {
     }
 
     if (path === "/v1/runs" && method === "GET") {
+      const env = url.searchParams.get("env");
+      if (env === "prod") {
+        await json([
+          {
+            run_id: "run-prod",
+            workload_name: "demo-agent",
+            status: "succeeded",
+            user: "admin",
+            created_at: "2026-05-26T09:01:00+00:00",
+            session_id: "session-prod"
+          }
+        ]);
+        return;
+      }
       await json([
         {
           run_id: "run-1",
@@ -892,6 +906,24 @@ async function mockApi(page: Page) {
     }
 
     if (path === "/v1/artifacts" && method === "GET") {
+      const env = url.searchParams.get("env");
+      if (env === "prod") {
+        await json([
+          {
+            id: "artifact-prod",
+            run_id: "run-prod",
+            workload_name: "demo-agent",
+            session_id: "session-prod",
+            name: "prod-reply.json",
+            uri: "local://reports/prod-reply.json",
+            content_type: "application/json",
+            size_bytes: 42,
+            created_at: "2026-05-26T09:01:03+00:00",
+            metadata: { source: "demo-agent", session_id: "session-prod" }
+          }
+        ]);
+        return;
+      }
       await json([
         {
           id: "artifact-1",
@@ -906,6 +938,22 @@ async function mockApi(page: Page) {
           metadata: { source: "demo-agent", session_id: "session1" }
         }
       ]);
+      return;
+    }
+
+    if (
+      path === "/v1/runs/run-prod/artifacts/artifact-prod/preview" &&
+      method === "GET"
+    ) {
+      await json({
+        artifact_id: "artifact-prod",
+        run_id: "run-prod",
+        name: "prod-reply.json",
+        content_type: "application/json",
+        text: '{ "reply": "Production demo response" }',
+        truncated: false,
+        size_bytes: 42
+      });
       return;
     }
 
@@ -1013,10 +1061,24 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
 
   await page.getByRole("navigation").getByRole("link", { name: "Artifacts" }).click();
   await expect(page).toHaveURL(/\/artifacts/);
+  await page.getByLabel("Environment").selectOption("prod");
+  await expect(page).toHaveURL(/\/artifacts\?env=prod/);
+  await expect(page.getByText("prod-reply.json").first()).toBeVisible();
+  await expect(page.getByText('"reply": "Production demo response"')).toBeVisible();
+  await page.getByLabel("Environment").selectOption("");
+  await expect(page.getByText("demo-reply.json").first()).toBeVisible();
 
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: "File" }).click();
   expect((await download).suggestedFilename()).toBe("demo-reply.json");
+
+  await page.getByRole("navigation").getByRole("link", { name: "Runs" }).click();
+  await page.getByLabel("Filter runs by environment").selectOption("prod");
+  await expect(page).toHaveURL(/\/runs\?env=prod/);
+  await expect(page.getByRole("link", { name: "run-prod" })).toBeVisible();
+  await expect(
+    page.getByRole("row").filter({ hasText: "run-prod" }).getByText("succeeded")
+  ).toBeVisible();
 
   await page.goto("/operations?workload=demo-agent");
   await expect(page.getByRole("heading", { name: "Operations Center" })).toBeVisible();

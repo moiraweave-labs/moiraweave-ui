@@ -532,8 +532,14 @@ export const api = {
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return request<AuditEvent[]>(`/v1/audit-events${suffix}`);
   },
-  runs: (workload?: string) =>
-    request<RunStatus[]>(`/v1/runs${workload ? `?workload_name=${workload}` : ""}`),
+  runs: (filters: { workload_name?: string; env?: string } = {}) => {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return request<RunStatus[]>(`/v1/runs${suffix}`);
+  },
   submitRun: (workload: string, payload: Record<string, unknown>) =>
     request<RunResponse>(`/v1/workloads/${workload}/runs`, {
       method: "POST",
@@ -569,6 +575,7 @@ export const api = {
     ),
   artifactLibrary: (filters: {
     workload_name?: string;
+    env?: string;
     session_id?: string;
     run_id?: string;
     content_type?: string;

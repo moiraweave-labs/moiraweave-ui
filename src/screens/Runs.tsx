@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Play, RefreshCcw } from "lucide-react";
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type { RunResponse } from "../api";
 import { useAuthProfile } from "../auth";
-import { SAMPLE_RUN_PAYLOAD } from "../constants";
+import { COMMON_ENVIRONMENTS, SAMPLE_RUN_PAYLOAD } from "../constants";
 import { isActiveRunStatus } from "../utils";
 import {
   ErrorMessage,
@@ -16,7 +16,9 @@ import { RunsMetrics, RunsTable } from "../components/runs";
 
 export function Runs() {
   const { canOperate } = useAuthProfile();
-  const [workload, setWorkload] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [workload, setWorkload] = useState(() => searchParams.get("workload_name") || "");
+  const [env, setEnv] = useState(() => searchParams.get("env") || "");
   const [submitWorkload, setSubmitWorkload] = useState("");
   const [payloadDraft, setPayloadDraft] = useState(SAMPLE_RUN_PAYLOAD);
   const [submitted, setSubmitted] = useState<RunResponse | null>(null);
@@ -26,10 +28,21 @@ export function Runs() {
     queryFn: api.workloads
   });
   const { data = [], isFetching, refetch } = useQuery({
-    queryKey: ["runs", workload],
-    queryFn: () => api.runs(workload || undefined),
+    queryKey: ["runs", workload, env],
+    queryFn: () =>
+      api.runs({
+        workload_name: workload || undefined,
+        env: env || undefined
+      }),
     refetchInterval: 3000
   });
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (workload) next.set("workload_name", workload);
+    if (env) next.set("env", env);
+    setSearchParams(next, { replace: true });
+  }, [env, setSearchParams, workload]);
   const submitRun = useMutation({
     mutationFn: () =>
       api.submitRun(
@@ -114,13 +127,26 @@ export function Runs() {
       <RunsMetrics metrics={metrics} />
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="relative w-full max-w-sm">
+        <div className="grid w-full gap-3 md:grid-cols-[minmax(220px,1fr)_180px] lg:max-w-2xl">
           <input
             className="w-full rounded-lg border border-slate-800 bg-[#0e1322] pl-3.5 pr-10 py-2 text-sm text-slate-200 outline-none focus:border-slate-700"
             value={workload}
             onChange={(event) => setWorkload(event.target.value)}
             placeholder="Filter by workload name..."
           />
+          <select
+            className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-sm text-slate-200 outline-none focus:border-slate-700"
+            value={env}
+            onChange={(event) => setEnv(event.target.value)}
+            aria-label="Filter runs by environment"
+          >
+            <option value="">All environments</option>
+            {COMMON_ENVIRONMENTS.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </div>
         <button
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-800 bg-[#0e1322] hover:bg-slate-800 text-slate-400 transition-colors"

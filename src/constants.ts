@@ -1,3 +1,5 @@
+export const COMMON_ENVIRONMENTS = ["local", "dev", "staging", "prod"];
+
 export const SAMPLE_WORKLOAD = `{
   "apiVersion": "moiraweave.io/v1alpha1",
   "kind": "Workload",

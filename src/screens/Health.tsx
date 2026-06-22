@@ -23,7 +23,7 @@ import type {
   WorkloadInfo
 } from "../api";
 import { useAuthProfile } from "../auth";
-import { SAMPLE_DEPLOYMENT_METADATA } from "../constants";
+import { COMMON_ENVIRONMENTS, SAMPLE_DEPLOYMENT_METADATA } from "../constants";
 import { HealthTile, Panel, PermissionNotice, StateBadge } from "../components/common";
 import {
   AuditEventsPanel,
@@ -65,7 +65,6 @@ type ReadinessCheck = {
   metadata?: Record<string, unknown>;
 };
 
-const COMMON_ENVIRONMENTS = ["local", "dev", "staging", "prod"];
 const HEALTHY_CHECK_STATES = new Set(["ok", "passed", "ready", "healthy", "present"]);
 
 function readinessChecks(body: unknown): Array<[string, ReadinessCheck]> {

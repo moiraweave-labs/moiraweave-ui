@@ -29,6 +29,7 @@ import {
   AuditEventsPanel,
   CommandCompanionPanel,
   ControllerQueuePanel,
+  DeadLetterQueuePanel,
   DeploymentOperationSummary,
   DeploymentOperationsPanel,
   DeploymentPlanSummary,
@@ -543,6 +544,12 @@ export function Health() {
     queryFn: () => api.runs(),
     refetchInterval: 5000
   });
+  const deadLetters = useQuery({
+    queryKey: ["dead-letter"],
+    queryFn: () => api.deadLetters(),
+    enabled: canOperate,
+    refetchInterval: 10000
+  });
   const selectedWorkloadHealth = useQuery({
     queryKey: ["workload-health", workload, planEnv],
     queryFn: () => api.workloadHealth(workload, planEnv || undefined),
@@ -646,6 +653,23 @@ export function Health() {
       queryClient.invalidateQueries({ queryKey: ["audit-events"] });
     }
   });
+  const replayDeadLetter = useMutation({
+    mutationFn: (messageId: string) => api.replayDeadLetter(messageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dead-letter"] });
+      queryClient.invalidateQueries({ queryKey: ["operations-alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-events"] });
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+    }
+  });
+  const purgeDeadLetter = useMutation({
+    mutationFn: (messageId: string) => api.purgeDeadLetter(messageId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["dead-letter"] });
+      queryClient.invalidateQueries({ queryKey: ["operations-alerts"] });
+      queryClient.invalidateQueries({ queryKey: ["audit-events"] });
+    }
+  });
   const recordDeployment = useMutation({
     mutationFn: () =>
       api.recordDeployment(workload, {
@@ -739,6 +763,16 @@ export function Health() {
         alerts={operationsAlerts.data || []}
         isLoading={operationsAlerts.isLoading}
         error={operationsAlerts.error}
+      />
+      <DeadLetterQueuePanel
+        canOperate={canOperate}
+        entries={deadLetters.data || []}
+        isLoading={deadLetters.isLoading}
+        error={deadLetters.error}
+        replayingId={replayDeadLetter.variables}
+        purgingId={purgeDeadLetter.variables}
+        onReplay={(messageId) => replayDeadLetter.mutate(messageId)}
+        onPurge={(messageId) => purgeDeadLetter.mutate(messageId)}
       />
       <AgentOperationsPanel
         deployments={deployments.data || []}

@@ -1,5 +1,6 @@
 import type {
   AuditEvent,
+  DeadLetterEntry,
   Deployment,
   DeploymentOperation,
   DeploymentOperationEvent,
@@ -88,6 +89,99 @@ export function EnvironmentOverviewPanel({
             moira env list
           </code>
         </div>
+      </div>
+    </Panel>
+  );
+}
+
+export function DeadLetterQueuePanel({
+  canOperate,
+  entries,
+  error,
+  isLoading,
+  onPurge,
+  onReplay,
+  purgingId,
+  replayingId
+}: {
+  canOperate: boolean;
+  entries: DeadLetterEntry[];
+  error: unknown;
+  isLoading: boolean;
+  onPurge: (messageId: string) => void;
+  onReplay: (messageId: string) => void;
+  purgingId?: string;
+  replayingId?: string;
+}) {
+  return (
+    <Panel title="Dead-letter Queue">
+      <div className="divide-y divide-slate-900">
+        {isLoading && (
+          <div className="px-5 py-6 text-xs text-slate-500">
+            Loading dead-letter messages...
+          </div>
+        )}
+        {!isLoading && Boolean(error) && (
+          <div className="p-5">
+            <ErrorMessage error={error} fallback="Unable to inspect dead-letter queue." />
+          </div>
+        )}
+        {!isLoading && !error && entries.length === 0 && (
+          <div className="px-5 py-6 text-xs text-slate-500">
+            No failed dispatch messages are waiting for operator review.
+          </div>
+        )}
+        {!isLoading &&
+          !error &&
+          entries.map((entry) => (
+            <div
+              key={entry.message_id}
+              className="grid gap-4 px-5 py-4 text-xs xl:grid-cols-[180px_1fr_220px]"
+            >
+              <div className="space-y-2">
+                <div className="font-mono text-[10px] font-semibold text-sky-300">
+                  {entry.message_id}
+                </div>
+                <StateBadge state={entry.reason} />
+                <div className="text-[10px] text-slate-500">
+                  {entry.source_stream} / {entry.source_id}
+                </div>
+                {entry.created_at && (
+                  <div className="text-[10px] text-slate-500">
+                    {formatDate(entry.created_at)}
+                  </div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <div className="rounded border border-slate-800 bg-[#050811] px-3 py-2 text-[11px] text-slate-300">
+                  Inspect the payload, fix the runtime or manifest problem, then replay.
+                  Purge only when the message should not run.
+                </div>
+                <code className="block max-h-36 overflow-auto whitespace-pre-wrap rounded border border-slate-800 bg-slate-950/70 px-3 py-2 text-[10px] text-slate-300">
+                  {JSON.stringify(entry.payload, null, 2)}
+                </code>
+              </div>
+              <div className="space-y-2">
+                <button
+                  className="w-full rounded border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/20 disabled:border-slate-800 disabled:bg-slate-900 disabled:text-slate-600"
+                  disabled={!canOperate || replayingId === entry.message_id}
+                  onClick={() => onReplay(entry.message_id)}
+                >
+                  {replayingId === entry.message_id ? "Replaying..." : "Replay"}
+                </button>
+                <button
+                  className="w-full rounded border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 transition-colors hover:bg-rose-500/20 disabled:border-slate-800 disabled:bg-slate-900 disabled:text-slate-600"
+                  disabled={!canOperate || purgingId === entry.message_id}
+                  onClick={() => onPurge(entry.message_id)}
+                >
+                  {purgingId === entry.message_id ? "Purging..." : "Purge"}
+                </button>
+                <code className="block rounded border border-slate-800 bg-slate-950/70 px-3 py-2 font-mono text-[10px] text-sky-300">
+                  moira run dead-letter replay {entry.message_id}
+                </code>
+              </div>
+            </div>
+          ))}
       </div>
     </Panel>
   );

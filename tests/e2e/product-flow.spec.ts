@@ -143,6 +143,20 @@ async function mockApi(page: Page) {
   const users: Array<Record<string, unknown>> = [];
   const teams: Array<Record<string, unknown>> = [];
   const teamMembers: Record<string, Array<Record<string, unknown>>> = {};
+  const deadLetters: Array<Record<string, unknown>> = [
+    {
+      message_id: "1700000000-0",
+      source_stream: "moiraweave:runs",
+      source_id: "1-0",
+      reason: "runtime_unavailable",
+      payload: {
+        run_id: "run-1",
+        workload_name: "demo-agent",
+        payload: { message: "hello" }
+      },
+      created_at: "2026-05-26T08:02:00+00:00"
+    }
+  ];
 
   await page.route("**/*", async (route) => {
     const request = route.request();
@@ -487,6 +501,46 @@ async function mockApi(page: Page) {
 
     if (path === "/v1/operations/alerts" && method === "GET") {
       await json([]);
+      return;
+    }
+
+    if (path === "/v1/runs/dead-letter" && method === "GET") {
+      await json(deadLetters);
+      return;
+    }
+
+    const deadLetterReplayMatch = path.match(/^\/v1\/runs\/dead-letter\/(.+)\/replay$/);
+    if (deadLetterReplayMatch && method === "POST") {
+      const messageId = decodeURIComponent(deadLetterReplayMatch[1]);
+      const index = deadLetters.findIndex((entry) => entry.message_id === messageId);
+      if (index < 0) {
+        await json({ detail: "Dead-letter entry not found" }, 404);
+        return;
+      }
+      const [entry] = deadLetters.splice(index, 1);
+      await json(
+        {
+          message_id: entry.message_id,
+          replayed_message_id: "2-0",
+          run_id: "run-1",
+          workload_name: "demo-agent",
+          reason: entry.reason
+        },
+        202
+      );
+      return;
+    }
+
+    const deadLetterPurgeMatch = path.match(/^\/v1\/runs\/dead-letter\/(.+)$/);
+    if (deadLetterPurgeMatch && method === "DELETE") {
+      const messageId = decodeURIComponent(deadLetterPurgeMatch[1]);
+      const index = deadLetters.findIndex((entry) => entry.message_id === messageId);
+      if (index < 0) {
+        await json({ detail: "Dead-letter entry not found" }, 404);
+        return;
+      }
+      const [entry] = deadLetters.splice(index, 1);
+      await json(entry);
       return;
     }
 
@@ -978,6 +1032,15 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByText("local/local", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Platform Checks")).toBeVisible();
   await expect(page.getByText("docker compose logs ui")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dead-letter Queue" })).toBeVisible();
+  await expect(page.getByText("runtime_unavailable")).toBeVisible();
+  await expect(
+    page.getByText("moira run dead-letter replay 1700000000-0")
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Replay" }).click();
+  await expect(
+    page.getByText("No failed dispatch messages are waiting for operator review.")
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Agent Runtime Supervision" })).toBeVisible();
   await expect(page.getByRole("link", { name: "demo-agent" }).first()).toBeVisible();
   await expect(page.getByText("Run plan/apply from CLI or CI")).toBeVisible();

@@ -37,6 +37,23 @@ export type RunEvent = {
   data: Record<string, unknown>;
 };
 
+export type DeadLetterEntry = {
+  message_id: string;
+  source_stream: string;
+  source_id: string;
+  reason: string;
+  payload: Record<string, unknown>;
+  created_at?: string | null;
+};
+
+export type DeadLetterReplay = {
+  message_id: string;
+  replayed_message_id: string;
+  run_id: string;
+  workload_name: string;
+  reason: string;
+};
+
 export type Artifact = {
   id: string;
   run_id: string;
@@ -522,6 +539,18 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ payload })
     }),
+  deadLetters: (limit = 50) =>
+    request<DeadLetterEntry[]>(`/v1/runs/dead-letter?limit=${limit}`),
+  replayDeadLetter: (messageId: string) =>
+    request<DeadLetterReplay>(
+      `/v1/runs/dead-letter/${encodeURIComponent(messageId)}/replay`,
+      { method: "POST" }
+    ),
+  purgeDeadLetter: (messageId: string) =>
+    request<DeadLetterEntry>(
+      `/v1/runs/dead-letter/${encodeURIComponent(messageId)}`,
+      { method: "DELETE" }
+    ),
   run: (id: string) => request<RunStatus>(`/v1/runs/${id}`),
   cancelRun: (id: string) => request<RunStatus>(`/v1/runs/${id}/cancel`, { method: "POST" }),
   events: (id: string) => request<RunEvent[]>(`/v1/runs/${id}/events`),

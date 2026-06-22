@@ -853,14 +853,19 @@ export function DeploymentOperationSummary({
     ...commandList(operation.metadata.action_commands)
   ];
   const nextActions = commandList(operation.metadata.next_actions);
+  const execution = operationExecutionMode(operation);
   const hasControllerState =
     operation.controller_id || operation.heartbeat_at || operation.lease_expires_at;
   return (
     <div className="space-y-2 rounded-lg border border-slate-800/80 bg-[#0b0f19]/60 p-3 text-xs sm:col-span-2">
-      <div className="grid gap-2 sm:grid-cols-3">
+      <div className="grid gap-2 sm:grid-cols-4">
         <Metric label="Operation" value={<span className="font-mono text-slate-300">{operation.operation_id.slice(0, 8)}</span>} />
         <Metric label="Action" value={<span className="text-slate-300">{operation.action}</span>} />
         <Metric label="Status" value={<StateBadge state={operation.status} />} />
+        <Metric label="Execution" value={<ExecutionModeBadge mode={execution} />} />
+      </div>
+      <div className="rounded border border-slate-800 bg-[#050811] px-3 py-2 text-[11px] text-slate-400">
+        {execution.description}
       </div>
       {hasControllerState && (
         <div className="grid gap-2 sm:grid-cols-3">
@@ -955,6 +960,79 @@ function commandList(value: unknown): string[] {
   return value.map(String).filter((item) => item.length > 0);
 }
 
+type OperationExecutionMode = {
+  description: string;
+  label: string;
+  tone: "amber" | "emerald" | "sky" | "slate";
+};
+
+function operationExecutionMode(operation: DeploymentOperation): OperationExecutionMode {
+  const executor =
+    typeof operation.metadata.executor === "string" ? operation.metadata.executor : "";
+  const hasGuidanceCommands =
+    commandList(operation.metadata.log_commands).length > 0 ||
+    commandList(operation.metadata.action_commands).length > 0 ||
+    commandList(operation.metadata.next_actions).length > 0 ||
+    typeof operation.metadata.blocked_reason === "string" ||
+    operation.action === "plan";
+
+  if (isControllerOperation(operation)) {
+    return {
+      description:
+        "A trusted CLI or in-cluster deployment controller claims this operation and executes it outside the browser.",
+      label: "controller-executed",
+      tone: "emerald"
+    };
+  }
+  if (executor === "manual") {
+    return {
+      description:
+        "The operation is tracked in MoiraWeave, while a human operator performs the external action.",
+      label: "manual",
+      tone: "slate"
+    };
+  }
+  if (hasGuidanceCommands && operation.action !== "sync") {
+    return {
+      description:
+        "MoiraWeave generated plan, log, or apply guidance. A trusted operator or controller must run the commands.",
+      label: "guidance-only",
+      tone: "amber"
+    };
+  }
+  return {
+    description:
+      "The API control plane records metadata and synchronizes status without direct browser access to Docker or Kubernetes.",
+    label: "control-plane",
+    tone: "sky"
+  };
+}
+
+function ExecutionModeBadge({
+  compact = false,
+  mode
+}: {
+  compact?: boolean;
+  mode: OperationExecutionMode;
+}) {
+  const toneClass = {
+    amber: "border-amber-500/30 bg-amber-500/10 text-amber-200",
+    emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-200",
+    sky: "border-sky-500/30 bg-sky-500/10 text-sky-200",
+    slate: "border-slate-700 bg-slate-950/40 text-slate-300"
+  }[mode.tone];
+  return (
+    <span
+      className={`inline-flex max-w-full items-center rounded border px-2 py-1 font-mono text-[10px] ${toneClass}`}
+      title={mode.description}
+    >
+      <span className={compact ? "truncate" : "whitespace-normal break-words"}>
+        {mode.label}
+      </span>
+    </span>
+  );
+}
+
 export function DeploymentsPanel({ deployments }: { deployments: Deployment[] }) {
   return (
     <Panel title="Deployments">
@@ -994,7 +1072,7 @@ export function DeploymentOperationsPanel({
         {operations.map((item) => (
           <button
             key={item.operation_id}
-            className={`grid w-full gap-3 p-5 text-left text-sm transition-colors md:grid-cols-[110px_1fr_90px_90px_100px_120px_160px] ${
+            className={`grid w-full gap-3 p-5 text-left text-sm transition-colors md:grid-cols-[110px_1fr_90px_90px_100px_130px_120px_160px] ${
               selectedOperationId === item.operation_id
                 ? "bg-emerald-500/5"
                 : "hover:bg-slate-800/10"
@@ -1008,6 +1086,7 @@ export function DeploymentOperationsPanel({
             <span className="text-xs text-slate-400">{item.target}</span>
             <span className="text-xs text-slate-400">{item.env}</span>
             <span className="text-xs text-slate-400">{item.action}</span>
+            <ExecutionModeBadge mode={operationExecutionMode(item)} compact />
             <StateBadge state={item.status} />
             <span className="text-[10px] text-slate-500">{formatDate(item.created_at)}</span>
           </button>

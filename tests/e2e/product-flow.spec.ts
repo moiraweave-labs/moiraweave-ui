@@ -985,12 +985,21 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await page.getByRole("button", { name: "Plan" }).click();
   await expect(page.getByText("operation.plan")).toBeVisible();
   await expect(page.getByText("Deployment plan generated.")).toBeVisible();
+  await expect(page.getByText("guidance-only").first()).toBeVisible();
+  await expect(
+    page.getByText("MoiraWeave generated plan, log, or apply guidance.")
+  ).toBeVisible();
   await expect(
     page.getByText(".moiraweave/deploy/docker-compose.workloads.yml", {
       exact: true
     })
   ).toBeVisible();
   await expect(page.getByText("Run moira up for local execution.")).toBeVisible();
+  await page.getByRole("button", { name: "Sync" }).click();
+  await expect(page.getByText("control-plane").first()).toBeVisible();
+  await expect(
+    page.getByText("The API control plane records metadata and synchronizes status")
+  ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Audit Trail" })).toBeVisible();
   await expect(page.getByText("agent.message")).toBeVisible();
   await expect(page.getByText("session1").last()).toBeVisible();
@@ -1081,6 +1090,10 @@ test("queues kubernetes deployment operations for the cli controller", async ({ 
   ).toBeVisible();
   await expect(
     page.getByText("Deployment operation queued for a deployment controller.")
+  ).toBeVisible();
+  await expect(page.getByText("controller-executed").first()).toBeVisible();
+  await expect(
+    page.getByText("A trusted CLI or in-cluster deployment controller claims this operation")
   ).toBeVisible();
   await expect(
     page.getByText("helm upgrade --install moiraweave infra/helm/moiraweave")

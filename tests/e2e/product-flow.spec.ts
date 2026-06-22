@@ -302,6 +302,31 @@ async function mockApi(page: Page) {
       return;
     }
 
+    if (path.startsWith("/auth/users/") && path.endsWith("/enable") && method === "POST") {
+      const subject = decodeURIComponent(path.split("/")[3]);
+      const user = users.find((item) => item.subject === subject);
+      if (!user) {
+        await json({ detail: "User not found" }, 404);
+        return;
+      }
+      user.disabled_at = null;
+      user.updated_at = "2026-05-26T08:10:00+00:00";
+      await json(user);
+      return;
+    }
+
+    if (path.startsWith("/auth/users/") && path.endsWith("/password/reset") && method === "POST") {
+      const subject = decodeURIComponent(path.split("/")[3]);
+      const user = users.find((item) => item.subject === subject);
+      if (!user) {
+        await json({ detail: "User not found" }, 404);
+        return;
+      }
+      user.updated_at = "2026-05-26T08:11:00+00:00";
+      await json(user);
+      return;
+    }
+
     if (path === "/auth/teams" && method === "GET") {
       await json(teams);
       return;
@@ -1077,6 +1102,14 @@ test("manages API keys from the security console", async ({ page }) => {
   await page.getByLabel("User role").selectOption("operator");
   await page.getByRole("button", { name: "Create User" }).click();
   await expect(page.getByRole("table").getByText("team-bot")).toBeVisible();
+  await page.getByTitle("Disable user").click();
+  await expect(page.getByRole("table").getByText("disabled")).toBeVisible();
+  await page.getByTitle("Enable user").click();
+  await expect(page.getByRole("table").getByText("active")).toBeVisible();
+  await page.getByLabel("Reset subject").fill("team-bot");
+  await page.getByLabel("Temporary password").fill("temporary-reset-123");
+  await page.getByRole("button", { name: "Reset Password" }).click();
+  await expect(page.getByText("Password reset applied.")).toBeVisible();
 
   await page.getByLabel("Team ID").fill("agents");
   await page.getByLabel("Team name").fill("Agent Operators");

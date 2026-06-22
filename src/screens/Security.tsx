@@ -6,6 +6,7 @@ import {
   RotateCw,
   ShieldCheck,
   Trash2,
+  UserCheck,
   UserCog,
   UserPlus
 } from "lucide-react";
@@ -35,6 +36,8 @@ export function Security() {
   const [userDisplayName, setUserDisplayName] = useState("");
   const [userPassword, setUserPassword] = useState("");
   const [userRole, setUserRole] = useState("operator");
+  const [resetSubject, setResetSubject] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
   const [teamId, setTeamId] = useState("agents");
   const [teamName, setTeamName] = useState("Agent Operators");
   const [teamDescription, setTeamDescription] = useState("");
@@ -112,6 +115,20 @@ export function Security() {
       queryClient.invalidateQueries({ queryKey: ["users"] });
     }
   });
+  const enableUser = useMutation({
+    mutationFn: (subject: string) => api.enableUser(subject),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    }
+  });
+  const resetUserPassword = useMutation({
+    mutationFn: () =>
+      api.resetUserPassword(resetSubject.trim(), resetPassword),
+    onSuccess: () => {
+      setResetPassword("");
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    }
+  });
   const createTeam = useMutation({
     mutationFn: () =>
       api.createTeam({
@@ -154,6 +171,12 @@ export function Security() {
     event.preventDefault();
     if (!canAdmin || !userSubject.trim() || userPassword.length < 8) return;
     createUser.mutate();
+  }
+
+  function submitPasswordReset(event: FormEvent) {
+    event.preventDefault();
+    if (!canAdmin || !resetSubject.trim() || resetPassword.length < 8) return;
+    resetUserPassword.mutate();
   }
 
   function submitTeam(event: FormEvent) {
@@ -248,6 +271,42 @@ export function Security() {
                 disabled={!canAdmin || createTeam.isPending || !teamId.trim() || !teamName.trim()}
                 icon={<Building2 className="h-4 w-4" />}
                 label="Create Team"
+              />
+            </form>
+          </Panel>
+
+          <Panel title="Reset User Password">
+            <form className="space-y-4 p-5" onSubmit={submitPasswordReset}>
+              <TextInput
+                disabled={!canAdmin}
+                label="Subject"
+                value={resetSubject}
+                onChange={setResetSubject}
+                ariaLabel="Reset subject"
+              />
+              <TextInput
+                disabled={!canAdmin}
+                label="Temporary Password"
+                type="password"
+                value={resetPassword}
+                onChange={setResetPassword}
+                ariaLabel="Temporary password"
+              />
+              {resetUserPassword.isSuccess && (
+                <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                  Password reset applied. Share the temporary password out of band.
+                </p>
+              )}
+              {resetUserPassword.error && (
+                <ErrorMessage
+                  error={resetUserPassword.error}
+                  fallback="Password reset failed."
+                />
+              )}
+              <ActionButton
+                disabled={!canAdmin || resetUserPassword.isPending || !resetSubject.trim() || resetPassword.length < 8}
+                icon={<KeyRound className="h-4 w-4" />}
+                label="Reset Password"
               />
             </form>
           </Panel>
@@ -377,14 +436,24 @@ export function Security() {
                         <StateBadge state={item.disabled_at ? "disabled" : "active"} />
                       </td>
                       <td className="px-5 py-3 text-right">
-                        <button
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-40"
-                          disabled={!canAdmin || Boolean(item.disabled_at) || disableUser.isPending}
-                          onClick={() => disableUser.mutate(item.subject)}
-                          title="Disable user"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40"
+                            disabled={!canAdmin || !item.disabled_at || enableUser.isPending}
+                            onClick={() => enableUser.mutate(item.subject)}
+                            title="Enable user"
+                          >
+                            <UserCheck className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/20 disabled:opacity-40"
+                            disabled={!canAdmin || Boolean(item.disabled_at) || disableUser.isPending}
+                            onClick={() => disableUser.mutate(item.subject)}
+                            title="Disable user"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -395,7 +464,7 @@ export function Security() {
                 </tbody>
               </table>
             </div>
-            <PanelErrors errors={[users.error, disableUser.error]} fallback="Unable to load users." />
+            <PanelErrors errors={[users.error, disableUser.error, enableUser.error]} fallback="Unable to load users." />
           </Panel>
 
           <Panel title="Teams">

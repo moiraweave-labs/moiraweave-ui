@@ -379,6 +379,18 @@ export const api = {
     request<UserAccount>(`/auth/users/${encodeURIComponent(subject)}`, {
       method: "DELETE"
     }),
+  enableUser: (subject: string) =>
+    request<UserAccount>(`/auth/users/${encodeURIComponent(subject)}/enable`, {
+      method: "POST"
+    }),
+  resetUserPassword: (subject: string, newPassword: string) =>
+    request<UserAccount>(
+      `/auth/users/${encodeURIComponent(subject)}/password/reset`,
+      {
+        method: "POST",
+        body: JSON.stringify({ new_password: newPassword })
+      }
+    ),
   teams: () => request<Team[]>("/auth/teams"),
   createTeam: (body: { team_id: string; name: string; description?: string | null }) =>
     request<Team>("/auth/teams", {

@@ -610,7 +610,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ metadata: {} })
     }),
-  sessions: (agent: string) => request<AgentSession[]>(`/v1/agents/${agent}/sessions`),
+  sessions: (agent: string, options: { limit?: number; offset?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    if (options.offset !== undefined) params.set("offset", String(options.offset));
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return request<AgentSession[]>(`/v1/agents/${agent}/sessions${suffix}`);
+  },
   sessionHealth: (agent: string, sessionId: string) =>
     request<AgentSessionHealth>(`/v1/agents/${agent}/sessions/${sessionId}/health`),
   message: (agent: string, sessionId: string, message: string) =>
@@ -627,8 +633,19 @@ export const api = {
         metadata: {}
       })
     }),
-  history: (agent: string, sessionId: string) =>
-    request<AgentMessage[]>(`/v1/agents/${agent}/sessions/${sessionId}/messages`)
+  history: (
+    agent: string,
+    sessionId: string,
+    options: { beforeId?: string; limit?: number } = {}
+  ) => {
+    const params = new URLSearchParams();
+    if (options.beforeId) params.set("before_id", options.beforeId);
+    if (options.limit !== undefined) params.set("limit", String(options.limit));
+    const suffix = params.toString() ? `?${params.toString()}` : "";
+    return request<AgentMessage[]>(
+      `/v1/agents/${agent}/sessions/${sessionId}/messages${suffix}`
+    );
+  }
 };
 
 export function streamRunEvents(

@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import {
   Activity,
   Archive,
@@ -68,12 +73,18 @@ export function AgentConsole() {
     [selectedAgent]
   );
 
-  const sessions = useQuery({
+  const sessions = useInfiniteQuery({
     queryKey: ["sessions", agent],
-    queryFn: () => api.sessions(agent),
-    enabled: Boolean(agent),
-    refetchInterval: 5000
+    queryFn: ({ pageParam }) => api.sessions(agent, { limit: 50, offset: pageParam }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === 50 ? pages.length * 50 : undefined,
+    enabled: Boolean(agent)
   });
+  const sessionItems = useMemo(
+    () => sessions.data?.pages.flatMap((page) => page) || [],
+    [sessions.data]
+  );
 
   useEffect(() => {
     if (requestedAgentKnown && agent !== requestedAgent) {
@@ -93,25 +104,52 @@ export function AgentConsole() {
   useEffect(() => {
     if (!sessions.data) return;
     if (requestedSessionId) {
-      const requestedSession = sessions.data.find(
+      const requestedSession = sessionItems.find(
         (session) => session.session_id === requestedSessionId
       );
       if (requestedSession && selected?.session_id !== requestedSession.session_id) {
         setSelected(requestedSession);
         return;
       }
+      if (!requestedSession && sessions.hasNextPage && !sessions.isFetchingNextPage) {
+        void sessions.fetchNextPage();
+        return;
+      }
     }
-    if (!selected && sessions.data.length > 0) {
-      setSelected(sessions.data[0]);
+    if (!selected && sessionItems.length > 0) {
+      setSelected(sessionItems[0]);
     }
-  }, [requestedSessionId, selected, sessions.data]);
+  }, [
+    requestedSessionId,
+    selected,
+    sessionItems,
+    sessions.data,
+    sessions.fetchNextPage,
+    sessions.hasNextPage,
+    sessions.isFetchingNextPage
+  ]);
 
-  const history = useQuery({
+  const history = useInfiniteQuery({
     queryKey: ["history", agent, selected?.session_id],
-    queryFn: () => api.history(agent, selected!.session_id),
+    queryFn: ({ pageParam }) =>
+      api.history(agent, selected!.session_id, {
+        beforeId: pageParam || undefined,
+        limit: 100
+      }),
+    initialPageParam: "",
+    getNextPageParam: (lastPage) =>
+      lastPage.length === 100 ? lastPage[0]?.message_id : undefined,
     enabled: Boolean(agent && selected),
     refetchInterval: 2500
   });
+  const historyMessages = useMemo(
+    () =>
+      history.data?.pages
+        .slice()
+        .reverse()
+        .flatMap((page) => page) || [],
+    [history.data]
+  );
   const sessionHealth = useQuery({
     queryKey: ["session-health", agent, selected?.session_id],
     queryFn: () => api.sessionHealth(agent, selected!.session_id),
@@ -120,11 +158,11 @@ export function AgentConsole() {
   });
   const historyItems = useMemo(
     () =>
-      (history.data || []).map((item) => {
+      historyMessages.map((item) => {
         if (!item.run_id || !streamedEvents[item.run_id]) return item;
         return { ...item, latest_event: streamedEvents[item.run_id] };
       }),
-    [history.data, streamedEvents]
+    [historyMessages, streamedEvents]
   );
   const activeRunIds = useMemo(
     () =>
@@ -299,7 +337,7 @@ export function AgentConsole() {
           </div>
 
           <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
-            {(sessions.data || []).map((session) => (
+            {sessionItems.map((session) => (
               <button
                 key={session.session_id}
                 className={`block w-full rounded-lg border px-3.5 py-2.5 text-left transition-all ${
@@ -316,7 +354,7 @@ export function AgentConsole() {
                 <span className="block text-[10px] text-slate-500 mt-0.5">{formatDate(session.created_at).split(",")[0]}</span>
               </button>
             ))}
-            {sessions.data && sessions.data.length === 0 && agent && (
+            {sessions.data && sessionItems.length === 0 && agent && (
               <div className="rounded-lg border border-dashed border-slate-800 bg-[#090d16]/40 p-4 text-center">
                 <div className="text-xs font-semibold text-slate-300">No sessions yet</div>
                 <button
@@ -331,6 +369,16 @@ export function AgentConsole() {
             )}
             {!agent && (
               <div className="text-center py-6 text-xs text-slate-500">Choose an agent workload</div>
+            )}
+            {sessions.hasNextPage && (
+              <button
+                className="w-full rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800/60 disabled:opacity-50"
+                disabled={sessions.isFetchingNextPage}
+                onClick={() => sessions.fetchNextPage()}
+                type="button"
+              >
+                {sessions.isFetchingNextPage ? "Loading sessions..." : "Load older sessions"}
+              </button>
             )}
           </div>
 
@@ -393,6 +441,16 @@ export function AgentConsole() {
               onRetry={(text) => retry.mutate(text)}
             />
             <AgentTurnDetails message={selectedRunMessage} />
+            {history.hasNextPage && (
+              <button
+                className="w-full rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800/60 disabled:opacity-50"
+                disabled={history.isFetchingNextPage}
+                onClick={() => history.fetchNextPage()}
+                type="button"
+              >
+                {history.isFetchingNextPage ? "Loading messages..." : "Load earlier messages"}
+              </button>
+            )}
             {filteredHistory.map((item) => (
               <MessageBubble
                 key={item.message_id}
@@ -434,7 +492,7 @@ export function AgentConsole() {
                 </div>
               </div>
             )}
-            {selected && (history.data || []).length === 0 && (
+            {selected && historyMessages.length === 0 && (
               <div className="flex flex-col items-center justify-center py-16 text-center text-slate-500">
                 <MessageSquare className="h-8 w-8 text-slate-800 mb-1.5" />
                 <p className="text-xs font-medium">Session initialized. Send a message to get started.</p>

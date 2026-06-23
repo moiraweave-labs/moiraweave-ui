@@ -639,6 +639,20 @@ async function mockApi(page: Page) {
     }
 
     if (path === "/v1/audit-events" && method === "GET") {
+      if (url.searchParams.get("env") === "prod") {
+        await json([
+          {
+            event_id: "prod-audit-1",
+            timestamp: "2026-05-26T09:01:00+00:00",
+            actor: "admin",
+            action: "deployment_operation.apply",
+            resource_type: "deployment_operation",
+            resource_id: "operation-prod",
+            metadata: { env: "prod", workload_name: "demo-agent" }
+          }
+        ]);
+        return;
+      }
       await json([
         {
           event_id: "1",
@@ -1128,6 +1142,12 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByRole("heading", { name: "Audit Trail" })).toBeVisible();
   await expect(page.getByText("agent.message")).toBeVisible();
   await expect(page.getByText("session1").last()).toBeVisible();
+
+  await page.goto("/operations?workload=demo-agent&env=prod");
+  await expect(page.getByLabel("Custom environment")).toHaveValue("prod");
+  await expect(page).toHaveURL(/\/operations\?workload=demo-agent&env=prod/);
+  await expect(page.getByText("deployment_operation.apply")).toBeVisible();
+  await expect(page.getByText("operation-prod")).toBeVisible();
 });
 
 test("explains real agent template requirements before creation", async ({ page }) => {

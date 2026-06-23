@@ -522,6 +522,7 @@ export const api = {
     action?: string;
     resource_type?: string;
     resource_id?: string;
+    env?: string;
     limit?: number;
     offset?: number;
   } = {}) => {

@@ -469,9 +469,10 @@ export function Health() {
   const { canOperate, canAdmin } = useAuthProfile();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedWorkload = searchParams.get("workload") || "";
+  const requestedEnv = searchParams.get("env") || "local";
   const [workload, setWorkload] = useState(() => requestedWorkload);
   const [target, setTarget] = useState("local");
-  const [planEnv, setPlanEnv] = useState("local");
+  const [planEnv, setPlanEnv] = useState(() => requestedEnv);
   const [status, setStatus] = useState("deployed");
   const [endpoint, setEndpoint] = useState("");
   const [metadataDraft, setMetadataDraft] = useState(SAMPLE_DEPLOYMENT_METADATA);
@@ -498,6 +499,7 @@ export function Health() {
   const auditEvents = useQuery({
     queryKey: [
       "audit-events",
+      planEnv,
       auditFilters.action,
       auditFilters.resourceType,
       auditFilters.resourceId
@@ -507,6 +509,7 @@ export function Health() {
         action: auditFilters.action.trim() || undefined,
         resource_type: auditFilters.resourceType.trim() || undefined,
         resource_id: auditFilters.resourceId.trim() || undefined,
+        env: planEnv || undefined,
         limit: 25
       }),
     refetchInterval: 15000
@@ -736,6 +739,17 @@ export function Health() {
     setSearchParams(nextParams, { replace: true });
   }
 
+  function selectEnvironment(nextEnv: string) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (nextEnv) {
+      nextParams.set("env", nextEnv);
+    } else {
+      nextParams.delete("env");
+    }
+    setPlanEnv(nextEnv);
+    setSearchParams(nextParams, { replace: true });
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid gap-6 md:grid-cols-2">
@@ -756,7 +770,7 @@ export function Health() {
         selectedEnv={planEnv}
         isLoading={environments.isLoading}
         error={environments.error}
-        onSelect={setPlanEnv}
+        onSelect={selectEnvironment}
       />
       <OperationsAlertsPanel
         alerts={operationsAlerts.data || []}
@@ -893,7 +907,7 @@ export function Health() {
                         ? "bg-emerald-500/20 text-emerald-200"
                         : "text-slate-500 hover:bg-slate-800/60 hover:text-slate-200"
                     }`}
-                    onClick={() => setPlanEnv(envName)}
+                    onClick={() => selectEnvironment(envName)}
                   >
                     {envName}
                   </button>
@@ -903,7 +917,7 @@ export function Health() {
                 aria-label="Custom environment"
                 className="mt-2 w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
                 value={planEnv}
-                onChange={(event) => setPlanEnv(event.target.value)}
+                onChange={(event) => selectEnvironment(event.target.value)}
                 placeholder="custom-env"
               />
             </div>

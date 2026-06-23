@@ -35,7 +35,7 @@ export function RunDetail() {
   });
   const events = useQuery({
     queryKey: ["events", runId],
-    queryFn: () => api.events(runId),
+    queryFn: () => api.events(runId, { tail: true }),
     enabled: Boolean(runId)
   });
   const artifacts = useQuery({
@@ -47,9 +47,10 @@ export function RunDetail() {
     mutationFn: () => api.cancelRun(runId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["run", runId] })
   });
+  const lastStoredEventId = events.data?.[events.data.length - 1]?.id;
 
   useEffect(() => {
-    if (!runId) return undefined;
+    if (!runId || events.isLoading) return undefined;
     setStreamedEvents([]);
     setStreamStatus({
       status: "connecting",
@@ -82,10 +83,11 @@ export function RunDetail() {
               }
             : currentStatus
         );
-      }
+      },
+      { afterId: lastStoredEventId }
     );
     return () => controller.abort();
-  }, [runId]);
+  }, [events.isLoading, lastStoredEventId, runId]);
 
   const timeline = mergeEvents(events.data || [], streamedEvents);
   const current = run.data;

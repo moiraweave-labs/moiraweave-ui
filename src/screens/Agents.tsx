@@ -137,6 +137,14 @@ export function AgentConsole() {
       ),
     [historyItems]
   );
+  const activeRunCursors = useMemo(
+    () =>
+      activeRunIds.map((runId) => ({
+        runId,
+        afterId: historyItems.find((item) => item.run_id === runId)?.latest_event?.id
+      })),
+    [activeRunIds, historyItems]
+  );
   const activeRunKey = activeRunIds.join("|");
   const filteredHistory = useMemo(
     () =>
@@ -174,9 +182,8 @@ export function AgentConsole() {
   }, [historyItems, latestRunMessage?.message_id, selectedMessageId]);
 
   useEffect(() => {
-    const runIds = activeRunKey ? activeRunKey.split("|") : [];
-    if (!runIds.length || !agent || !selected?.session_id) return;
-    const controllers = runIds.map((runId) =>
+    if (!activeRunCursors.length || !agent || !selected?.session_id) return;
+    const controllers = activeRunCursors.map(({ runId, afterId }) =>
       streamRunEvents(
         runId,
         (event) => {
@@ -191,7 +198,9 @@ export function AgentConsole() {
           queryClient.invalidateQueries({ queryKey: ["artifacts", runId] });
           queryClient.invalidateQueries({ queryKey: ["runs"] });
         },
-        () => undefined
+        () => undefined,
+        undefined,
+        { afterId }
       )
     );
     return () => controllers.forEach((controller) => controller.abort());

@@ -570,7 +570,10 @@ export const api = {
     ),
   run: (id: string) => request<RunStatus>(`/v1/runs/${id}`),
   cancelRun: (id: string) => request<RunStatus>(`/v1/runs/${id}/cancel`, { method: "POST" }),
-  events: (id: string) => request<RunEvent[]>(`/v1/runs/${id}/events`),
+  events: (id: string, options?: { tail?: boolean }) =>
+    request<RunEvent[]>(
+      `/v1/runs/${id}/events${options?.tail ? "?tail=true" : ""}`
+    ),
   artifacts: (id: string) => request<Artifact[]>(`/v1/runs/${id}/artifacts`),
   artifactPreview: (runId: string, artifactId: string, maxBytes = 65536) =>
     request<ArtifactPreview>(
@@ -632,12 +635,14 @@ export function streamRunEvents(
   runId: string,
   onEvent: (event: RunEvent) => void,
   onError?: (error: unknown) => void,
-  onOpen?: () => void
+  onOpen?: () => void,
+  options?: { afterId?: string }
 ): AbortController {
   const controller = new AbortController();
   const token = getToken();
   const headers = new Headers();
   if (token) headers.set("Authorization", `Bearer ${token}`);
+  if (options?.afterId) headers.set("Last-Event-ID", options.afterId);
 
   void fetch(`${API_BASE}/v1/runs/${runId}/events/stream`, {
     headers,

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -32,7 +32,7 @@ export function Artifacts() {
     setSearchParams(next, { replace: true });
   }, [contentType, createdFrom, createdTo, env, runId, sessionId, setSearchParams, workload]);
 
-  const artifacts = useQuery({
+  const artifacts = useInfiniteQuery({
     queryKey: [
       "artifact-library",
       workload,
@@ -43,7 +43,7 @@ export function Artifacts() {
       createdFrom,
       createdTo
     ],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       api.artifactLibrary({
         workload_name: workload || undefined,
         env: env || undefined,
@@ -51,11 +51,19 @@ export function Artifacts() {
         run_id: runId || undefined,
         content_type: contentType || undefined,
         created_from: normalizeDateFilter(createdFrom, "from"),
-        created_to: normalizeDateFilter(createdTo, "to")
+        created_to: normalizeDateFilter(createdTo, "to"),
+        limit: 100,
+        offset: pageParam
       }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === 100 ? pages.length * 100 : undefined,
     refetchInterval: 5000
   });
-  const discoveredArtifacts = artifacts.data || [];
+  const discoveredArtifacts = useMemo(
+    () => artifacts.data?.pages.flatMap((page) => page) || [],
+    [artifacts.data]
+  );
   const selectedArtifact = useMemo(
     () =>
       discoveredArtifacts.find((artifact) => artifact.id === selectedArtifactId) ||
@@ -244,6 +252,18 @@ export function Artifacts() {
             {discoveredArtifacts.length === 0 && (
               <div className="p-6 text-center text-xs text-slate-500">
                 No artifacts match the current filters
+              </div>
+            )}
+            {artifacts.hasNextPage && (
+              <div className="p-5">
+                <button
+                  className="w-full rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800/60 disabled:opacity-50"
+                  disabled={artifacts.isFetchingNextPage}
+                  onClick={() => artifacts.fetchNextPage()}
+                  type="button"
+                >
+                  {artifacts.isFetchingNextPage ? "Loading artifacts..." : "Load more artifacts"}
+                </button>
               </div>
             )}
           </div>

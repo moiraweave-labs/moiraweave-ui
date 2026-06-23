@@ -595,10 +595,12 @@ export const api = {
     content_type?: string;
     created_from?: string;
     created_to?: string;
+    limit?: number;
+    offset?: number;
   }) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
+      if (value !== undefined && value !== "") params.set(key, String(value));
     });
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return request<Artifact[]>(`/v1/artifacts${suffix}`);

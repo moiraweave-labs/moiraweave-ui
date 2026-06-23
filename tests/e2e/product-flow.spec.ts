@@ -5,6 +5,8 @@ type Workload = {
   type: string;
   execution_mode: string;
   image: string;
+  owner_subject?: string | null;
+  team_id?: string | null;
   manifest: Record<string, unknown>;
 };
 
@@ -141,7 +143,16 @@ async function mockApi(page: Page) {
   const deploymentOperationEvents: Record<string, Array<Record<string, unknown>>> = {};
   const apiKeys: Array<Record<string, unknown>> = [];
   const users: Array<Record<string, unknown>> = [];
-  const teams: Array<Record<string, unknown>> = [];
+  const teams: Array<Record<string, unknown>> = [
+    {
+      team_id: "agents-a",
+      name: "Agents A",
+      description: "Agent operations",
+      created_by: "admin",
+      created_at: "2026-05-26T08:00:00+00:00",
+      updated_at: "2026-05-26T08:00:00+00:00"
+    }
+  ];
   const teamMembers: Record<string, Array<Record<string, unknown>>> = {};
   const deadLetters: Array<Record<string, unknown>> = [
     {
@@ -477,10 +488,15 @@ async function mockApi(page: Page) {
           : payload.template_id === "openclaw"
             ? openClawWorkload
             : demoWorkload;
-      if (!workloads.some((item) => item.name === templateWorkload.name)) {
-        workloads.push(templateWorkload);
+      const createdWorkload = {
+        ...templateWorkload,
+        owner_subject: "admin",
+        team_id: payload.team_id || null
+      };
+      if (!workloads.some((item) => item.name === createdWorkload.name)) {
+        workloads.push(createdWorkload);
       }
-      await json(templateWorkload, 201);
+      await json(createdWorkload, 201);
       return;
     }
 
@@ -1150,6 +1166,19 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByText("operation-prod")).toBeVisible();
   await expect(page.getByRole("link", { name: "run-prod" })).toBeVisible();
   await expect(page.getByRole("link", { name: "run-1" })).toHaveCount(0);
+});
+
+test("creates a team-scoped workload without editing the manifest", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel("Workload team").selectOption("agents-a");
+  await page.getByRole("button", { name: "Create" }).click();
+
+  await expect(page.getByText("Created demo-agent")).toBeVisible();
+  await expect(page.getByText("Team: agents-a")).toBeVisible();
 });
 
 test("explains real agent template requirements before creation", async ({ page }) => {

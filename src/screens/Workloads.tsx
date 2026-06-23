@@ -27,6 +27,7 @@ export function Workloads() {
   const [draft, setDraft] = useState(SAMPLE_WORKLOAD);
   const [templateId, setTemplateId] = useState("demo-agent");
   const [templateParams, setTemplateParams] = useState<Record<string, string>>({});
+  const [teamId, setTeamId] = useState("");
   const { data = [], isLoading, error } = useQuery({
     queryKey: ["workloads"],
     queryFn: api.workloads
@@ -34,6 +35,11 @@ export function Workloads() {
   const templates = useQuery({
     queryKey: ["templates"],
     queryFn: api.templates
+  });
+  const teams = useQuery({
+    queryKey: ["teams", "workload-scope"],
+    queryFn: api.teams,
+    enabled: canAdmin
   });
   const selectedTemplate = useMemo(
     () => (templates.data || []).find((item) => item.id === templateId),
@@ -54,7 +60,7 @@ export function Workloads() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["workloads"] })
   });
   const createFromTemplate = useMutation({
-    mutationFn: () => api.createWorkloadFromTemplate(templateId, templateParams),
+    mutationFn: () => api.createWorkloadFromTemplate(templateId, templateParams, teamId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workloads"] });
       queryClient.invalidateQueries({ queryKey: ["deployments"] });
@@ -72,6 +78,7 @@ export function Workloads() {
                 <th className="px-5 py-3">Name</th>
                 <th className="px-5 py-3">Type</th>
                 <th className="px-5 py-3">Mode</th>
+                <th className="px-5 py-3">Scope</th>
                 <th className="px-5 py-3">Image</th>
                 <th className="px-5 py-3">Agent</th>
                 <th className="px-5 py-3">Health</th>
@@ -79,8 +86,8 @@ export function Workloads() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
-              {isLoading && <RowMessage colSpan={7} text="Loading workloads..." />}
-              {error && <RowMessage colSpan={7} text="Request failed" />}
+              {isLoading && <RowMessage colSpan={8} text="Loading workloads..." />}
+              {error && <RowMessage colSpan={8} text="Request failed" />}
               {data.map((workload) => {
                 const adapter = agentAdapter(workload.manifest);
                 return (
@@ -90,6 +97,17 @@ export function Workloads() {
                       <span className="rounded bg-slate-800 px-2 py-0.5 border border-slate-700/50">{workload.type}</span>
                     </td>
                     <td className="px-5 py-4 text-xs text-slate-400">{workload.execution_mode}</td>
+                    <td className="px-5 py-4 text-xs text-slate-400">
+                      {workload.team_id ? (
+                        <span className="rounded border border-sky-500/20 bg-sky-500/10 px-2 py-0.5 text-sky-200">
+                          Team: {workload.team_id}
+                        </span>
+                      ) : (
+                        <span className="rounded border border-slate-800 bg-slate-900/40 px-2 py-0.5 text-slate-500">
+                          Shared
+                        </span>
+                      )}
+                    </td>
                     <td className="max-w-md truncate px-5 py-4 text-xs text-slate-500 font-mono">
                       {workload.image || "-"}
                     </td>
@@ -129,7 +147,7 @@ export function Workloads() {
                   </tr>
                 );
               })}
-              {data.length === 0 && !isLoading && <RowMessage colSpan={7} text="No workloads registered" />}
+              {data.length === 0 && !isLoading && <RowMessage colSpan={8} text="No workloads registered" />}
             </tbody>
           </table>
         </div>
@@ -171,6 +189,27 @@ export function Workloads() {
             {selectedTemplate && (
               <TemplateSummary template={selectedTemplate} />
             )}
+            <div>
+              <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                Team scope
+              </label>
+              <select
+                aria-label="Workload team"
+                className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={teamId}
+                onChange={(event) => setTeamId(event.target.value)}
+              >
+                <option value="">Shared platform workload</option>
+                {(teams.data || []).map((team) => (
+                  <option key={team.team_id} value={team.team_id}>
+                    {team.name} ({team.team_id})
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-[11px] text-slate-500">
+                Team-scoped workloads are only visible and runnable by that team's members.
+              </p>
+            </div>
             <div className="grid gap-3">
               {(selectedTemplate?.parameters || []).map((parameter) => (
                 <div key={parameter.name}>

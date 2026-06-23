@@ -3,6 +3,8 @@ export type WorkloadInfo = {
   type: string;
   execution_mode: string;
   image?: string | null;
+  owner_subject?: string | null;
+  team_id?: string | null;
   manifest: Record<string, unknown>;
 };
 
@@ -433,10 +435,18 @@ export const api = {
     request<SecretInventory>(
       `/v1/secrets${workload ? `?workload_name=${encodeURIComponent(workload)}` : ""}`
     ),
-  createWorkloadFromTemplate: (templateId: string, parameters: Record<string, unknown>) =>
+  createWorkloadFromTemplate: (
+    templateId: string,
+    parameters: Record<string, unknown>,
+    teamId?: string
+  ) =>
     request<WorkloadInfo>("/v1/workloads/from-template", {
       method: "POST",
-      body: JSON.stringify({ template_id: templateId, parameters })
+      body: JSON.stringify({
+        template_id: templateId,
+        parameters,
+        ...(teamId ? { team_id: teamId } : {})
+      })
     }),
   registerWorkload: (manifest: Record<string, unknown>) =>
     request<WorkloadInfo>("/v1/workloads", {

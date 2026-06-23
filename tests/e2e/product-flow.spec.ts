@@ -1148,6 +1148,8 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page).toHaveURL(/\/operations\?workload=demo-agent&env=prod/);
   await expect(page.getByText("deployment_operation.apply")).toBeVisible();
   await expect(page.getByText("operation-prod")).toBeVisible();
+  await expect(page.getByRole("link", { name: "run-prod" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "run-1" })).toHaveCount(0);
 });
 
 test("explains real agent template requirements before creation", async ({ page }) => {

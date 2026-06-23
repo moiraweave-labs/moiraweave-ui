@@ -542,8 +542,8 @@ export function Health() {
   });
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
   const runs = useQuery({
-    queryKey: ["runs", "operations-center"],
-    queryFn: () => api.runs(),
+    queryKey: ["runs", "operations-center", planEnv],
+    queryFn: () => api.runs({ env: planEnv || undefined }),
     refetchInterval: 5000
   });
   const deadLetters = useQuery({
@@ -706,6 +706,12 @@ export function Health() {
       setWorkload(requestedWorkload);
     }
   }, [requestedWorkload, workload]);
+
+  useEffect(() => {
+    if (planEnv !== requestedEnv) {
+      setPlanEnv(requestedEnv);
+    }
+  }, [planEnv, requestedEnv]);
 
   useEffect(() => {
     if (!operation) return;

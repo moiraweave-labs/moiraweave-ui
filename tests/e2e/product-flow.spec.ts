@@ -130,15 +130,31 @@ const openClawWorkload: Workload = {
   manifest: openClawManifest
 };
 
-async function mockApi(page: Page) {
+async function mockApi(page: Page, options: { paginatedAgentData?: boolean } = {}) {
   const workloads: Workload[] = [];
   const sessions: Array<{
     session_id: string;
     agent_name: string;
     status: string;
     created_at: string;
-  }> = [];
-  const history: Array<Record<string, unknown>> = [];
+  }> = options.paginatedAgentData
+    ? Array.from({ length: 51 }, (_, index) => ({
+        session_id: `session-${index + 1}`,
+        agent_name: "demo-agent",
+        status: "active",
+        created_at: `2026-05-${String(26 - Math.floor(index / 10)).padStart(2, "0")}T08:00:00+00:00`
+      }))
+    : [];
+  const history: Array<Record<string, unknown>> = options.paginatedAgentData
+    ? Array.from({ length: 101 }, (_, index) => ({
+        message_id: String(index + 1),
+        session_id: "session-51",
+        role: "user",
+        message: `history-${index + 1}`,
+        context: {},
+        created_at: "2026-05-26T08:01:00+00:00"
+      }))
+    : [];
   const deploymentOperations: Array<Record<string, unknown>> = [];
   const deploymentOperationEvents: Record<string, Array<Record<string, unknown>>> = {};
   const apiKeys: Array<Record<string, unknown>> = [];
@@ -768,7 +784,9 @@ async function mockApi(page: Page) {
     }
 
     if (path === "/v1/agents/demo-agent/sessions" && method === "GET") {
-      await json(sessions);
+      const limit = Number(url.searchParams.get("limit") || sessions.length);
+      const offset = Number(url.searchParams.get("offset") || 0);
+      await json(sessions.slice(offset, offset + limit));
       return;
     }
 
@@ -784,12 +802,12 @@ async function mockApi(page: Page) {
       return;
     }
 
-    if (
-      path === "/v1/agents/demo-agent/sessions/session1/health" &&
-      method === "GET"
-    ) {
+    const sessionHealthMatch = path.match(
+      /^\/v1\/agents\/demo-agent\/sessions\/([^/]+)\/health$/
+    );
+    if (sessionHealthMatch && method === "GET") {
       await json({
-        session_id: "session1",
+        session_id: sessionHealthMatch[1],
         agent_name: "demo-agent",
         status: "healthy",
         latest_run_status: history.length > 0 ? "running" : null,
@@ -798,11 +816,16 @@ async function mockApi(page: Page) {
       return;
     }
 
-    if (
-      path === "/v1/agents/demo-agent/sessions/session1/messages" &&
-      method === "GET"
-    ) {
-      await json(history);
+    const sessionMessagesMatch = path.match(
+      /^\/v1\/agents\/demo-agent\/sessions\/([^/]+)\/messages$/
+    );
+    if (sessionMessagesMatch && method === "GET") {
+      const beforeId = url.searchParams.get("before_id");
+      const limit = Number(url.searchParams.get("limit") || history.length);
+      const beforeIndex = beforeId
+        ? history.findIndex((item) => item.message_id === beforeId)
+        : history.length;
+      await json(history.slice(0, beforeIndex).slice(-limit));
       return;
     }
 
@@ -1166,6 +1189,22 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByText("operation-prod")).toBeVisible();
   await expect(page.getByRole("link", { name: "run-prod" })).toBeVisible();
   await expect(page.getByRole("link", { name: "run-1" })).toHaveCount(0);
+});
+
+test("opens paginated agent history from a deep-linked session", async ({ page }) => {
+  await mockApi(page, { paginatedAgentData: true });
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
+  await expect(page.getByText("Created demo-agent")).toBeVisible();
+
+  await page.goto("/agents?agent=demo-agent&session_id=session-51");
+  await expect(page.getByText("history-2", { exact: true })).toBeVisible();
+  await expect(page.getByText("history-1", { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Load earlier messages" }).click();
+  await expect(page.getByText("history-1", { exact: true })).toBeVisible();
 });
 
 test("creates a team-scoped workload without editing the manifest", async ({ page }) => {

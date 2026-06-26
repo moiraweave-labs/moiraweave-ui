@@ -394,6 +394,24 @@ async function mockApi(
       return;
     }
 
+    if (path.startsWith("/auth/users/") && method === "PATCH") {
+      const subject = decodeURIComponent(path.split("/").pop() || "");
+      const body = request.postDataJSON() as {
+        display_name?: string | null;
+        role?: string;
+      };
+      const user = users.find((item) => item.subject === subject);
+      if (!user) {
+        await json({ detail: "User not found" }, 404);
+        return;
+      }
+      user.display_name = body.display_name ?? null;
+      user.role = body.role ?? user.role;
+      user.updated_at = "2026-05-26T08:12:00+00:00";
+      await json(user);
+      return;
+    }
+
     if (path.startsWith("/auth/users/") && method === "DELETE") {
       const subject = decodeURIComponent(path.split("/").pop() || "");
       const user = users.find((item) => item.subject === subject);
@@ -455,6 +473,25 @@ async function mockApi(
       else teams.unshift(team);
       teamMembers[body.team_id] ||= [];
       await json(team, 201);
+      return;
+    }
+
+    const teamPatchMatch = path.match(/^\/auth\/teams\/([^/]+)$/);
+    if (teamPatchMatch && method === "PATCH") {
+      const teamId = decodeURIComponent(teamPatchMatch[1]);
+      const body = request.postDataJSON() as {
+        name?: string;
+        description?: string | null;
+      };
+      const team = teams.find((item) => item.team_id === teamId);
+      if (!team) {
+        await json({ detail: "Team not found" }, 404);
+        return;
+      }
+      team.name = body.name ?? team.name;
+      team.description = body.description ?? null;
+      team.updated_at = "2026-05-26T08:12:00+00:00";
+      await json(team);
       return;
     }
 
@@ -1395,12 +1432,19 @@ test("manages API keys from the security console", async ({ page }) => {
 
   await page.getByRole("link", { name: "Security" }).click();
   await expect(page.getByRole("heading", { name: "Create User" })).toBeVisible();
-  await page.getByLabel("User subject").fill("team-bot");
-  await page.getByLabel("User display name").fill("Team Bot");
-  await page.getByLabel("User password").fill("correct-horse");
-  await page.getByLabel("User role").selectOption("operator");
+  await page.getByLabel("User subject", { exact: true }).fill("team-bot");
+  await page.getByLabel("User display name", { exact: true }).fill("Team Bot");
+  await page.getByLabel("User password", { exact: true }).fill("correct-horse");
+  await page.getByLabel("User role", { exact: true }).selectOption("operator");
   await page.getByRole("button", { name: "Create User" }).click();
   await expect(page.getByRole("table").getByText("team-bot")).toBeVisible();
+  await page.getByTitle("Edit user").click();
+  await page.getByLabel("Update user display name").fill("Team Bot Updated");
+  await page.getByLabel("Update user role").selectOption("viewer");
+  await page.getByRole("button", { name: "Update User" }).click();
+  await expect(page.getByText("User metadata updated.")).toBeVisible();
+  await expect(page.getByRole("table").getByText("Team Bot Updated")).toBeVisible();
+  await expect(page.getByRole("table").getByText("viewer").first()).toBeVisible();
   await page.getByTitle("Disable user").click();
   await expect(page.getByRole("table").getByText("disabled")).toBeVisible();
   await page.getByTitle("Enable user").click();
@@ -1410,12 +1454,24 @@ test("manages API keys from the security console", async ({ page }) => {
   await page.getByRole("button", { name: "Reset Password" }).click();
   await expect(page.getByText("Password reset applied.")).toBeVisible();
 
-  await page.getByLabel("Team ID").fill("agents");
-  await page.getByLabel("Team name").fill("Agent Operators");
-  await page.getByLabel("Team description").fill("Production agent operators");
+  await page.getByLabel("Team ID", { exact: true }).fill("agents");
+  await page.getByLabel("Team name", { exact: true }).fill("Agent Operators");
+  await page.getByLabel("Team description", { exact: true }).fill("Production agent operators");
   await page.getByRole("button", { name: "Create Team" }).click();
   await expect(
     page.getByRole("table").getByText("Agent Operators", { exact: true })
+  ).toBeVisible();
+  await page
+    .getByRole("row")
+    .filter({ hasText: "Agent Operators" })
+    .getByRole("button", { name: "Edit" })
+    .click();
+  await page.getByLabel("Update team name").fill("Agent Platform");
+  await page.getByLabel("Update team description").fill("Production agent platform");
+  await page.getByRole("button", { name: "Update Team" }).click();
+  await expect(page.getByText("Team metadata updated.")).toBeVisible();
+  await expect(
+    page.getByRole("table").getByText("Agent Platform", { exact: true })
   ).toBeVisible();
 
   await page.getByLabel("Member subject").fill("team-bot");

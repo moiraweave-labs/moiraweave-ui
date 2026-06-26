@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Building2,
   KeyRound,
+  Pencil,
   Plus,
   RotateCw,
   ShieldCheck,
@@ -36,11 +37,17 @@ export function Security() {
   const [userDisplayName, setUserDisplayName] = useState("");
   const [userPassword, setUserPassword] = useState("");
   const [userRole, setUserRole] = useState("operator");
+  const [editUserSubject, setEditUserSubject] = useState("");
+  const [editUserDisplayName, setEditUserDisplayName] = useState("");
+  const [editUserRole, setEditUserRole] = useState("operator");
   const [resetSubject, setResetSubject] = useState("");
   const [resetPassword, setResetPassword] = useState("");
   const [teamId, setTeamId] = useState("agents");
   const [teamName, setTeamName] = useState("Agent Operators");
   const [teamDescription, setTeamDescription] = useState("");
+  const [editTeamId, setEditTeamId] = useState("");
+  const [editTeamName, setEditTeamName] = useState("");
+  const [editTeamDescription, setEditTeamDescription] = useState("");
   const [memberTeamId, setMemberTeamId] = useState("");
   const [memberSubject, setMemberSubject] = useState("");
   const [memberRole, setMemberRole] = useState("operator");
@@ -121,6 +128,16 @@ export function Security() {
       queryClient.invalidateQueries({ queryKey: ["users"] });
     }
   });
+  const updateUser = useMutation({
+    mutationFn: () =>
+      api.updateUser(editUserSubject.trim(), {
+        display_name: editUserDisplayName.trim() || null,
+        role: editUserRole
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    }
+  });
   const resetUserPassword = useMutation({
     mutationFn: () =>
       api.resetUserPassword(resetSubject.trim(), resetPassword),
@@ -139,6 +156,18 @@ export function Security() {
     onSuccess: (team) => {
       setMemberTeamId(team.team_id);
       setKeyTeamId(team.team_id);
+      queryClient.invalidateQueries({ queryKey: ["teams"] });
+    }
+  });
+  const updateTeam = useMutation({
+    mutationFn: () =>
+      api.updateTeam(editTeamId.trim(), {
+        name: editTeamName.trim(),
+        description: editTeamDescription.trim() || null
+      }),
+    onSuccess: (team) => {
+      setEditTeamName(team.name);
+      setEditTeamDescription(team.description || "");
       queryClient.invalidateQueries({ queryKey: ["teams"] });
     }
   });
@@ -179,16 +208,42 @@ export function Security() {
     resetUserPassword.mutate();
   }
 
+  function submitUserUpdate(event: FormEvent) {
+    event.preventDefault();
+    if (!canAdmin || !editUserSubject.trim()) return;
+    updateUser.mutate();
+  }
+
   function submitTeam(event: FormEvent) {
     event.preventDefault();
     if (!canAdmin || !teamId.trim() || !teamName.trim()) return;
     createTeam.mutate();
   }
 
+  function submitTeamUpdate(event: FormEvent) {
+    event.preventDefault();
+    if (!canAdmin || !editTeamId.trim() || !editTeamName.trim()) return;
+    updateTeam.mutate();
+  }
+
   function submitMember(event: FormEvent) {
     event.preventDefault();
     if (!canAdmin || !selectedTeamId || !memberSubject.trim()) return;
     addMember.mutate();
+  }
+
+  function selectUserForEdit(user: { subject: string; display_name?: string | null; role: string }) {
+    setEditUserSubject(user.subject);
+    setEditUserDisplayName(user.display_name || "");
+    setEditUserRole(user.role);
+  }
+
+  function selectTeamForEdit(team: { team_id: string; name: string; description?: string | null }) {
+    setEditTeamId(team.team_id);
+    setEditTeamName(team.name);
+    setEditTeamDescription(team.description || "");
+    setMemberTeamId(team.team_id);
+    setKeyTeamId(team.team_id);
   }
 
   return (
@@ -271,6 +326,84 @@ export function Security() {
                 disabled={!canAdmin || createTeam.isPending || !teamId.trim() || !teamName.trim()}
                 icon={<Building2 className="h-4 w-4" />}
                 label="Create Team"
+              />
+            </form>
+          </Panel>
+
+          <Panel title="Update User">
+            <form className="space-y-4 p-5" onSubmit={submitUserUpdate}>
+              <TextInput
+                disabled={!canAdmin}
+                label="Subject"
+                value={editUserSubject}
+                onChange={setEditUserSubject}
+                ariaLabel="Update user subject"
+              />
+              <TextInput
+                disabled={!canAdmin}
+                label="Display Name"
+                value={editUserDisplayName}
+                onChange={setEditUserDisplayName}
+                ariaLabel="Update user display name"
+              />
+              <RoleSelect
+                disabled={!canAdmin}
+                label="Role"
+                value={editUserRole}
+                onChange={setEditUserRole}
+                ariaLabel="Update user role"
+              />
+              {updateUser.isSuccess && (
+                <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                  User metadata updated.
+                </p>
+              )}
+              {updateUser.error && (
+                <ErrorMessage error={updateUser.error} fallback="User update failed." />
+              )}
+              <ActionButton
+                disabled={!canAdmin || updateUser.isPending || !editUserSubject.trim()}
+                icon={<UserCog className="h-4 w-4" />}
+                label="Update User"
+              />
+            </form>
+          </Panel>
+
+          <Panel title="Update Team">
+            <form className="space-y-4 p-5" onSubmit={submitTeamUpdate}>
+              <TextInput
+                disabled={!canAdmin}
+                label="Team ID"
+                value={editTeamId}
+                onChange={setEditTeamId}
+                ariaLabel="Update team ID"
+              />
+              <TextInput
+                disabled={!canAdmin}
+                label="Name"
+                value={editTeamName}
+                onChange={setEditTeamName}
+                ariaLabel="Update team name"
+              />
+              <TextInput
+                disabled={!canAdmin}
+                label="Description"
+                value={editTeamDescription}
+                onChange={setEditTeamDescription}
+                ariaLabel="Update team description"
+              />
+              {updateTeam.isSuccess && (
+                <p className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">
+                  Team metadata updated.
+                </p>
+              )}
+              {updateTeam.error && (
+                <ErrorMessage error={updateTeam.error} fallback="Team update failed." />
+              )}
+              <ActionButton
+                disabled={!canAdmin || updateTeam.isPending || !editTeamId.trim() || !editTeamName.trim()}
+                icon={<Building2 className="h-4 w-4" />}
+                label="Update Team"
               />
             </form>
           </Panel>
@@ -438,6 +571,14 @@ export function Security() {
                       <td className="px-5 py-3 text-right">
                         <div className="inline-flex items-center gap-2">
                           <button
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-500/20 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 disabled:opacity-40"
+                            disabled={!canAdmin}
+                            onClick={() => selectUserForEdit(item)}
+                            title="Edit user"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40"
                             disabled={!canAdmin || !item.disabled_at || enableUser.isPending}
                             onClick={() => enableUser.mutate(item.subject)}
@@ -489,9 +630,9 @@ export function Security() {
                       <td className="px-5 py-3">
                         <button
                           className="rounded-lg border border-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-slate-800/50"
-                          onClick={() => setMemberTeamId(item.team_id)}
+                          onClick={() => selectTeamForEdit(item)}
                         >
-                          View
+                          Edit
                         </button>
                       </td>
                     </tr>

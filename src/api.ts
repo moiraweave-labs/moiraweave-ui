@@ -394,6 +394,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body)
     }),
+  updateUser: (
+    subject: string,
+    body: {
+      role?: string;
+      display_name?: string | null;
+    }
+  ) =>
+    request<UserAccount>(`/auth/users/${encodeURIComponent(subject)}`, {
+      method: "PATCH",
+      body: JSON.stringify(body)
+    }),
   disableUser: (subject: string) =>
     request<UserAccount>(`/auth/users/${encodeURIComponent(subject)}`, {
       method: "DELETE"
@@ -414,6 +425,14 @@ export const api = {
   createTeam: (body: { team_id: string; name: string; description?: string | null }) =>
     request<Team>("/auth/teams", {
       method: "POST",
+      body: JSON.stringify(body)
+    }),
+  updateTeam: (
+    teamId: string,
+    body: { name?: string; description?: string | null }
+  ) =>
+    request<Team>(`/auth/teams/${encodeURIComponent(teamId)}`, {
+      method: "PATCH",
       body: JSON.stringify(body)
     }),
   teamMembers: (teamId: string) =>

@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { ArtifactDetails } from "../components/ArtifactDetails";
-import { Panel } from "../components/common";
+import { ErrorMessage, Panel } from "../components/common";
 import { COMMON_ENVIRONMENTS } from "../constants";
 import { formatDate } from "../utils";
 
@@ -85,82 +85,90 @@ export function Artifacts() {
   return (
     <div className="space-y-6">
       <Panel title="Artifact Library Filters">
-        <div className="grid gap-3 p-5 md:grid-cols-3 xl:grid-cols-7">
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Workload</label>
-            <select
-              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
-              value={workload}
-              onChange={(event) => setWorkload(event.target.value)}
-            >
-              <option value="">All workloads</option>
-              {(workloads.data || []).map((item) => (
-                <option key={item.name} value={item.name}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Environment</label>
-            <select
-              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
-              value={env}
-              onChange={(event) => setEnv(event.target.value)}
-              aria-label="Environment"
-            >
-              <option value="">All environments</option>
-              {COMMON_ENVIRONMENTS.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Session ID</label>
-            <input
-              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
-              value={sessionId}
-              onChange={(event) => setSessionId(event.target.value)}
-              placeholder="optional"
+        <div className="space-y-4 p-5">
+          {workloads.error && (
+            <ErrorMessage
+              error={workloads.error}
+              fallback="Unable to load workload filters."
             />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Run ID</label>
-            <input
-              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
-              value={runId}
-              onChange={(event) => setRunId(event.target.value)}
-              placeholder="optional"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Content Type</label>
-            <input
-              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
-              value={contentType}
-              onChange={(event) => setContentType(event.target.value)}
-              placeholder="application/json"
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Created From</label>
-            <input
-              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
-              type="datetime-local"
-              value={createdFrom}
-              onChange={(event) => setCreatedFrom(event.target.value)}
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Created To</label>
-            <input
-              className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
-              type="datetime-local"
-              value={createdTo}
-              onChange={(event) => setCreatedTo(event.target.value)}
-            />
+          )}
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-7">
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Workload</label>
+              <select
+                className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={workload}
+                onChange={(event) => setWorkload(event.target.value)}
+              >
+                <option value="">All workloads</option>
+                {(workloads.data || []).map((item) => (
+                  <option key={item.name} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Environment</label>
+              <select
+                className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={env}
+                onChange={(event) => setEnv(event.target.value)}
+                aria-label="Environment"
+              >
+                <option value="">All environments</option>
+                {COMMON_ENVIRONMENTS.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Session ID</label>
+              <input
+                className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={sessionId}
+                onChange={(event) => setSessionId(event.target.value)}
+                placeholder="optional"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Run ID</label>
+              <input
+                className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={runId}
+                onChange={(event) => setRunId(event.target.value)}
+                placeholder="optional"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Content Type</label>
+              <input
+                className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                value={contentType}
+                onChange={(event) => setContentType(event.target.value)}
+                placeholder="application/json"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Created From</label>
+              <input
+                className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                type="datetime-local"
+                value={createdFrom}
+                onChange={(event) => setCreatedFrom(event.target.value)}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Created To</label>
+              <input
+                className="w-full rounded-lg border border-slate-800 bg-[#0e1322] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
+                type="datetime-local"
+                value={createdTo}
+                onChange={(event) => setCreatedTo(event.target.value)}
+              />
+            </div>
           </div>
         </div>
       </Panel>
@@ -249,7 +257,20 @@ export function Artifacts() {
                 </div>
               </div>
             ))}
-            {discoveredArtifacts.length === 0 && (
+            {artifacts.isLoading && discoveredArtifacts.length === 0 && (
+              <div className="p-6 text-center text-xs text-slate-500">
+                Loading artifact metadata...
+              </div>
+            )}
+            {artifacts.error && (
+              <div className="p-5">
+                <ErrorMessage
+                  error={artifacts.error}
+                  fallback="Unable to load artifact library."
+                />
+              </div>
+            )}
+            {!artifacts.isLoading && !artifacts.error && discoveredArtifacts.length === 0 && (
               <div className="p-6 text-center text-xs text-slate-500">
                 No artifacts match the current filters
               </div>

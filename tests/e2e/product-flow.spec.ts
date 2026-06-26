@@ -133,6 +133,7 @@ const openClawWorkload: Workload = {
 async function mockApi(
   page: Page,
   options: {
+    artifactLibraryFailure?: boolean;
     paginatedAgentData?: boolean;
     paginatedOperationsData?: boolean;
     sessionsFailure?: boolean;
@@ -1053,6 +1054,10 @@ async function mockApi(
     }
 
     if (path === "/v1/artifacts" && method === "GET") {
+      if (options.artifactLibraryFailure) {
+        await json({ detail: "artifact index unavailable" }, 503);
+        return;
+      }
       const env = url.searchParams.get("env");
       if (env === "prod") {
         await json([
@@ -1315,6 +1320,18 @@ test("keeps agent chat usable when the live turn stream degrades", async ({ page
     page.getByText("Dispatching message to agent runtime", { exact: true })
   ).toBeVisible();
   await expect(page.getByText("Runtime replied with artifact")).not.toBeVisible();
+});
+
+test("shows an artifact library error instead of an empty result", async ({ page }) => {
+  await mockApi(page, { artifactLibraryFailure: true });
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("navigation").getByRole("link", { name: "Artifacts" }).click();
+
+  await expect(page.getByText("artifact index unavailable")).toBeVisible();
+  await expect(page.getByText("No artifacts match the current filters")).toHaveCount(0);
 });
 
 test("shows an actionable error when agent sessions cannot load", async ({ page }) => {

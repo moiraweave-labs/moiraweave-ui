@@ -139,6 +139,7 @@ async function mockApi(
     runsFailure?: boolean;
     sessionsFailure?: boolean;
     streamFailure?: boolean;
+    workloadsFailure?: boolean;
   } = {}
 ) {
   const workloads: Workload[] = [];
@@ -599,6 +600,10 @@ async function mockApi(
     }
 
     if (path === "/v1/workloads" && method === "GET") {
+      if (options.workloadsFailure) {
+        await json({ detail: "workload index unavailable" }, 503);
+        return;
+      }
       await json(workloads);
       return;
     }
@@ -1349,6 +1354,17 @@ test("shows a run list error instead of an empty run table", async ({ page }) =>
 
   await expect(page.getByText("run index unavailable")).toBeVisible();
   await expect(page.getByText("No runs found")).toHaveCount(0);
+});
+
+test("shows a workload list error instead of an empty workload table", async ({ page }) => {
+  await mockApi(page, { workloadsFailure: true });
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByText("workload index unavailable")).toBeVisible();
+  await expect(page.getByText("No workloads registered")).toHaveCount(0);
 });
 
 test("shows an actionable error when agent sessions cannot load", async ({ page }) => {

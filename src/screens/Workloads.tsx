@@ -87,7 +87,16 @@ export function Workloads() {
             </thead>
             <tbody className="divide-y divide-slate-800/50">
               {isLoading && <RowMessage colSpan={8} text="Loading workloads..." />}
-              {error && <RowMessage colSpan={8} text="Request failed" />}
+              {error && (
+                <tr>
+                  <td className="px-5 py-5" colSpan={8}>
+                    <ErrorMessage
+                      error={error}
+                      fallback="Unable to load workloads."
+                    />
+                  </td>
+                </tr>
+              )}
               {data.map((workload) => {
                 const adapter = agentAdapter(workload.manifest);
                 return (
@@ -147,7 +156,9 @@ export function Workloads() {
                   </tr>
                 );
               })}
-              {data.length === 0 && !isLoading && <RowMessage colSpan={8} text="No workloads registered" />}
+              {data.length === 0 && !isLoading && !error && (
+                <RowMessage colSpan={8} text="No workloads registered" />
+              )}
             </tbody>
           </table>
         </div>

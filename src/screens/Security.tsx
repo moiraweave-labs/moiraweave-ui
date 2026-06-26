@@ -598,7 +598,7 @@ export function Security() {
                       </td>
                     </tr>
                   ))}
-                  {users.data && users.data.length === 0 && (
+                  {users.data && users.data.length === 0 && !users.error && (
                     <RowMessage colSpan={5} text="No users created" />
                   )}
                   {!canAdmin && <RowMessage colSpan={5} text="Admin role required" />}
@@ -637,7 +637,7 @@ export function Security() {
                       </td>
                     </tr>
                   ))}
-                  {teams.data && teams.data.length === 0 && (
+                  {teams.data && teams.data.length === 0 && !teams.error && (
                     <RowMessage colSpan={4} text="No teams created" />
                   )}
                   {!canAdmin && <RowMessage colSpan={4} text="Admin role required" />}
@@ -686,10 +686,12 @@ export function Security() {
                       </td>
                     </tr>
                   ))}
-                  {selectedTeamId && teamMembers.data?.length === 0 && (
+                  {selectedTeamId && teamMembers.data?.length === 0 && !teamMembers.error && (
                     <RowMessage colSpan={5} text="No members in selected team" />
                   )}
-                  {!selectedTeamId && <RowMessage colSpan={5} text="Select a team" />}
+                  {!selectedTeamId && !teams.error && !teamMembers.error && (
+                    <RowMessage colSpan={5} text="Select a team" />
+                  )}
                 </tbody>
               </table>
             </div>
@@ -763,7 +765,7 @@ export function Security() {
                       </td>
                     </tr>
                   ))}
-                  {keys.data && keys.data.length === 0 && (
+                  {keys.data && keys.data.length === 0 && !keys.error && (
                     <RowMessage colSpan={8} text="No API keys created" />
                   )}
                   {!canAdmin && <RowMessage colSpan={8} text="Admin role required" />}

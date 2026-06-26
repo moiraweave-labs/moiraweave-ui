@@ -140,6 +140,10 @@ async function mockApi(
     runDetailFailure?: boolean;
     runEventsFailure?: boolean;
     runsFailure?: boolean;
+    securityApiKeysFailure?: boolean;
+    securityTeamMembersFailure?: boolean;
+    securityTeamsFailure?: boolean;
+    securityUsersFailure?: boolean;
     sessionsFailure?: boolean;
     streamFailure?: boolean;
     workloadsFailure?: boolean;
@@ -309,6 +313,10 @@ async function mockApi(
     }
 
     if (path === "/auth/api-keys" && method === "GET") {
+      if (options.securityApiKeysFailure) {
+        await json({ detail: "api key index unavailable" }, 503);
+        return;
+      }
       await json(apiKeys);
       return;
     }
@@ -379,6 +387,10 @@ async function mockApi(
     }
 
     if (path === "/auth/users" && method === "GET") {
+      if (options.securityUsersFailure) {
+        await json({ detail: "user index unavailable" }, 503);
+        return;
+      }
       await json(users);
       return;
     }
@@ -461,6 +473,10 @@ async function mockApi(
     }
 
     if (path === "/auth/teams" && method === "GET") {
+      if (options.securityTeamsFailure) {
+        await json({ detail: "team index unavailable" }, 503);
+        return;
+      }
       await json(teams);
       return;
     }
@@ -508,6 +524,10 @@ async function mockApi(
 
     const teamMembersMatch = path.match(/^\/auth\/teams\/([^/]+)\/members$/);
     if (teamMembersMatch && method === "GET") {
+      if (options.securityTeamMembersFailure) {
+        await json({ detail: "team members unavailable" }, 503);
+        return;
+      }
       await json(teamMembers[decodeURIComponent(teamMembersMatch[1])] || []);
       return;
     }
@@ -1562,6 +1582,37 @@ test("queues kubernetes deployment operations for the cli controller", async ({ 
   await expect(
     page.getByText("helm upgrade --install moiraweave infra/helm/moiraweave")
   ).toBeVisible();
+});
+
+test("shows security list errors without misleading empty rows", async ({ page }) => {
+  await mockApi(page, {
+    securityApiKeysFailure: true,
+    securityTeamMembersFailure: true,
+    securityUsersFailure: true
+  });
+  await page.goto("/security");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByText("user index unavailable")).toBeVisible();
+  await expect(page.getByText("api key index unavailable")).toBeVisible();
+  await expect(page.getByText("team members unavailable")).toBeVisible();
+  await expect(page.getByText("No users created")).toHaveCount(0);
+  await expect(page.getByText("No API keys created")).toHaveCount(0);
+  await expect(page.getByText("No members in selected team")).toHaveCount(0);
+});
+
+test("shows team list errors without prompting for an empty team selection", async ({ page }) => {
+  await mockApi(page, { securityTeamsFailure: true });
+  await page.goto("/security");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByText("team index unavailable")).toBeVisible();
+  await expect(page.getByText("No teams created")).toHaveCount(0);
+  await expect(page.getByText("Select a team")).toHaveCount(0);
 });
 
 test("manages API keys from the security console", async ({ page }) => {

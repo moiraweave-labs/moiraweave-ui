@@ -1153,10 +1153,16 @@ export function DeploymentsPanel({ deployments }: { deployments: Deployment[] })
 
 export function DeploymentOperationsPanel({
   operations,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
   selectedOperationId,
   onSelect
 }: {
   operations: DeploymentOperation[];
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  onLoadMore: () => void;
   selectedOperationId?: string;
   onSelect: (operation: DeploymentOperation) => void;
 }) {
@@ -1191,6 +1197,18 @@ export function DeploymentOperationsPanel({
           </div>
         )}
       </div>
+      {hasNextPage && (
+        <div className="border-t border-slate-800/50 p-4 text-center">
+          <button
+            type="button"
+            className="rounded-lg border border-slate-800 bg-[#0e1322] px-4 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-800 disabled:text-slate-600"
+            disabled={isFetchingNextPage}
+            onClick={onLoadMore}
+          >
+            {isFetchingNextPage ? "Loading operations..." : "Load more operations"}
+          </button>
+        </div>
+      )}
     </Panel>
   );
 }
@@ -1301,12 +1319,18 @@ export function AuditEventsPanel({
   events,
   filters,
   isLoading,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
   error,
   onFiltersChange
 }: {
   events: AuditEvent[];
   filters: AuditEventFilters;
   isLoading: boolean;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  onLoadMore: () => void;
   error: unknown;
   onFiltersChange: (filters: AuditEventFilters) => void;
 }) {
@@ -1374,6 +1398,18 @@ export function AuditEventsPanel({
           </div>
         )}
       </div>
+      {hasNextPage && (
+        <div className="border-t border-slate-800/50 p-4 text-center">
+          <button
+            type="button"
+            className="rounded-lg border border-slate-800 bg-[#0e1322] px-4 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-800 disabled:text-slate-600"
+            disabled={isFetchingNextPage}
+            onClick={onLoadMore}
+          >
+            {isFetchingNextPage ? "Loading audit events..." : "Load more audit events"}
+          </button>
+        </div>
+      )}
     </Panel>
   );
 }

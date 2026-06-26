@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import { Play, RefreshCcw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -14,6 +19,8 @@ import {
 } from "../components/common";
 import { RunsMetrics, RunsTable } from "../components/runs";
 
+const RUNS_PAGE_SIZE = 50;
+
 export function Runs() {
   const { canOperate } = useAuthProfile();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -27,15 +34,24 @@ export function Runs() {
     queryKey: ["workloads"],
     queryFn: api.workloads
   });
-  const { data = [], isFetching, refetch } = useQuery({
+  const runs = useInfiniteQuery({
     queryKey: ["runs", workload, env],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       api.runs({
         workload_name: workload || undefined,
-        env: env || undefined
+        env: env || undefined,
+        limit: RUNS_PAGE_SIZE,
+        offset: pageParam
       }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === RUNS_PAGE_SIZE ? pages.length * RUNS_PAGE_SIZE : undefined,
     refetchInterval: 3000
   });
+  const data = useMemo(
+    () => runs.data?.pages.flatMap((page) => page) || [],
+    [runs.data]
+  );
 
   useEffect(() => {
     const next = new URLSearchParams();
@@ -150,14 +166,26 @@ export function Runs() {
         </div>
         <button
           className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-800 bg-[#0e1322] hover:bg-slate-800 text-slate-400 transition-colors"
-          onClick={() => refetch()}
+          onClick={() => runs.refetch()}
           title="Refresh runs"
         >
-          <RefreshCcw className={`h-4.5 w-4.5 text-slate-400 ${isFetching ? "animate-spin" : ""}`} />
+          <RefreshCcw className={`h-4.5 w-4.5 text-slate-400 ${runs.isFetching ? "animate-spin" : ""}`} />
         </button>
       </div>
 
       <RunsTable runs={data} />
+      {runs.hasNextPage && (
+        <div className="flex justify-center">
+          <button
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-800 bg-[#0e1322] px-4 py-2 text-xs font-semibold text-slate-200 transition-colors hover:bg-slate-800 disabled:text-slate-600"
+            disabled={runs.isFetchingNextPage}
+            onClick={() => runs.fetchNextPage()}
+          >
+            <RefreshCcw className={`h-3.5 w-3.5 ${runs.isFetchingNextPage ? "animate-spin" : ""}`} />
+            {runs.isFetchingNextPage ? "Loading runs..." : "Load more runs"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -456,7 +456,7 @@ export const api = {
   deployments: (filters: { workload_name?: string; env?: string } = {}) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
+      if (value !== undefined && value !== "") params.set(key, String(value));
     });
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return request<Deployment[]>(`/v1/deployments${suffix}`);
@@ -510,10 +510,12 @@ export const api = {
     status?: string;
     action?: string;
     scope?: string;
+    limit?: number;
+    offset?: number;
   } = {}) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
+      if (value !== undefined && value !== "") params.set(key, String(value));
     });
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return request<DeploymentOperation[]>(`/v1/deployment-operations${suffix}`);
@@ -543,10 +545,15 @@ export const api = {
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return request<AuditEvent[]>(`/v1/audit-events${suffix}`);
   },
-  runs: (filters: { workload_name?: string; env?: string } = {}) => {
+  runs: (filters: {
+    workload_name?: string;
+    env?: string;
+    limit?: number;
+    offset?: number;
+  } = {}) => {
     const params = new URLSearchParams();
     Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
+      if (value !== undefined && value !== "") params.set(key, String(value));
     });
     const suffix = params.toString() ? `?${params.toString()}` : "";
     return request<RunStatus[]>(`/v1/runs${suffix}`);

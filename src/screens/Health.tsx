@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient
+} from "@tanstack/react-query";
 import {
   Activity,
   Bot,
@@ -10,7 +15,7 @@ import {
   Terminal,
   Trash2
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import type {
@@ -48,6 +53,9 @@ import {
   isActiveRunStatus,
   isAttentionRunStatus
 } from "../utils";
+
+const DEPLOYMENT_OPERATIONS_PAGE_SIZE = 50;
+const AUDIT_EVENTS_PAGE_SIZE = 50;
 
 function hasStatus(body: unknown, status: string): boolean {
   return Boolean(
@@ -496,7 +504,7 @@ export function Health() {
     queryFn: api.environments,
     refetchInterval: 15000
   });
-  const auditEvents = useQuery({
+  const auditEvents = useInfiniteQuery({
     queryKey: [
       "audit-events",
       planEnv,
@@ -504,17 +512,23 @@ export function Health() {
       auditFilters.resourceType,
       auditFilters.resourceId
     ],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       api.auditEvents({
         action: auditFilters.action.trim() || undefined,
         resource_type: auditFilters.resourceType.trim() || undefined,
         resource_id: auditFilters.resourceId.trim() || undefined,
         env: planEnv || undefined,
-        limit: 25
+        limit: AUDIT_EVENTS_PAGE_SIZE,
+        offset: pageParam
       }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === AUDIT_EVENTS_PAGE_SIZE
+        ? pages.length * AUDIT_EVENTS_PAGE_SIZE
+        : undefined,
     refetchInterval: 15000
   });
-  const deploymentOperations = useQuery({
+  const deploymentOperations = useInfiniteQuery({
     queryKey: [
       "deployment-operations",
       workload || "all",
@@ -522,13 +536,20 @@ export function Health() {
       planEnv,
       canAdmin ? "all" : "mine"
     ],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       api.deploymentOperations({
         workload_name: workload || undefined,
         target,
         env: planEnv || undefined,
-        scope: canAdmin ? "all" : undefined
-    }),
+        scope: canAdmin ? "all" : undefined,
+        limit: DEPLOYMENT_OPERATIONS_PAGE_SIZE,
+        offset: pageParam
+      }),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, pages) =>
+      lastPage.length === DEPLOYMENT_OPERATIONS_PAGE_SIZE
+        ? pages.length * DEPLOYMENT_OPERATIONS_PAGE_SIZE
+        : undefined,
     refetchInterval: 10000
   });
   const operationsAlerts = useQuery({
@@ -543,7 +564,7 @@ export function Health() {
   const workloads = useQuery({ queryKey: ["workloads"], queryFn: api.workloads });
   const runs = useQuery({
     queryKey: ["runs", "operations-center", planEnv],
-    queryFn: () => api.runs({ env: planEnv || undefined }),
+    queryFn: () => api.runs({ env: planEnv || undefined, limit: 200, offset: 0 }),
     refetchInterval: 5000
   });
   const deadLetters = useQuery({
@@ -694,6 +715,14 @@ export function Health() {
       deployment.env === planEnv
   );
   const selectedWorkload = (workloads.data || []).find((item) => item.name === workload);
+  const deploymentOperationItems = useMemo(
+    () => deploymentOperations.data?.pages.flatMap((page) => page) || [],
+    [deploymentOperations.data]
+  );
+  const auditEventItems = useMemo(
+    () => auditEvents.data?.pages.flatMap((page) => page) || [],
+    [auditEvents.data]
+  );
 
   useEffect(() => {
     setPlan(null);
@@ -715,7 +744,7 @@ export function Health() {
 
   useEffect(() => {
     if (!operation) return;
-    const latest = (deploymentOperations.data || []).find(
+    const latest = deploymentOperationItems.find(
       (item) => item.operation_id === operation.operation_id
     );
     if (!latest) return;
@@ -727,7 +756,7 @@ export function Health() {
       setOperation(latest);
     }
   }, [
-    deploymentOperations.data,
+    deploymentOperationItems,
     operation?.completed_at,
     operation?.operation_id,
     operation?.status,
@@ -1012,7 +1041,7 @@ export function Health() {
       </Panel>
       {target === "kubernetes" && (
         <ControllerQueuePanel
-          operations={deploymentOperations.data || []}
+          operations={deploymentOperationItems}
           target={target}
           env={planEnv}
           onSelect={setOperation}
@@ -1020,14 +1049,20 @@ export function Health() {
       )}
       <DeploymentsPanel deployments={deployments.data || []} />
       <DeploymentOperationsPanel
-        operations={deploymentOperations.data || []}
+        operations={deploymentOperationItems}
+        hasNextPage={deploymentOperations.hasNextPage}
+        isFetchingNextPage={deploymentOperations.isFetchingNextPage}
+        onLoadMore={() => deploymentOperations.fetchNextPage()}
         selectedOperationId={operation?.operation_id}
         onSelect={setOperation}
       />
       <AuditEventsPanel
-        events={auditEvents.data || []}
+        events={auditEventItems}
         filters={auditFilters}
         isLoading={auditEvents.isLoading}
+        hasNextPage={auditEvents.hasNextPage}
+        isFetchingNextPage={auditEvents.isFetchingNextPage}
+        onLoadMore={() => auditEvents.fetchNextPage()}
         error={auditEvents.error}
         onFiltersChange={setAuditFilters}
       />

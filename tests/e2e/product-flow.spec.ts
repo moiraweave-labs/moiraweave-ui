@@ -130,7 +130,10 @@ const openClawWorkload: Workload = {
   manifest: openClawManifest
 };
 
-async function mockApi(page: Page, options: { paginatedAgentData?: boolean } = {}) {
+async function mockApi(
+  page: Page,
+  options: { paginatedAgentData?: boolean; paginatedOperationsData?: boolean } = {}
+) {
   const workloads: Workload[] = [];
   const sessions: Array<{
     session_id: string;
@@ -155,8 +158,63 @@ async function mockApi(page: Page, options: { paginatedAgentData?: boolean } = {
         created_at: "2026-05-26T08:01:00+00:00"
       }))
     : [];
-  const deploymentOperations: Array<Record<string, unknown>> = [];
+  const deploymentOperations: Array<Record<string, unknown>> =
+    options.paginatedOperationsData
+      ? Array.from({ length: 51 }, (_, index) => ({
+          operation_id: `op${String(index + 1).padStart(3, "0")}`,
+          action: "plan",
+          workload_name: "demo-agent",
+          target: "local",
+          env: "local",
+          status: "succeeded",
+          user: "admin",
+          created_at: `2026-05-26T08:${String(index).padStart(2, "0")}:00+00:00`,
+          updated_at: `2026-05-26T08:${String(index).padStart(2, "0")}:00+00:00`,
+          completed_at: `2026-05-26T08:${String(index).padStart(2, "0")}:00+00:00`,
+          metadata: { plan: { commands: ["moira deploy local"] } }
+        }))
+      : [];
   const deploymentOperationEvents: Record<string, Array<Record<string, unknown>>> = {};
+  const auditEvents: Array<Record<string, unknown>> = options.paginatedOperationsData
+    ? Array.from({ length: 51 }, (_, index) => ({
+        event_id: `audit-${String(index + 1).padStart(3, "0")}`,
+        timestamp: `2026-05-26T08:${String(index).padStart(2, "0")}:00+00:00`,
+        actor: "admin",
+        action: "agent.message",
+        resource_type: "agent_session",
+        resource_id: `session-${index + 1}`,
+        metadata: { agent_name: "demo-agent", run_id: `page-${String(index + 1).padStart(3, "0")}` }
+      }))
+    : [
+        {
+          event_id: "1",
+          timestamp: "2026-05-26T08:01:00+00:00",
+          actor: "admin",
+          action: "agent.message",
+          resource_type: "agent_session",
+          resource_id: "session1",
+          metadata: { agent_name: "demo-agent", run_id: "run-1" }
+        }
+      ];
+  const runs: Array<Record<string, unknown>> = options.paginatedOperationsData
+    ? Array.from({ length: 51 }, (_, index) => ({
+        run_id: `page-${String(index + 1).padStart(3, "0")}`,
+        workload_name: "demo-agent",
+        status: index % 2 === 0 ? "succeeded" : "running",
+        user: "admin",
+        created_at: `2026-05-26T08:${String(index).padStart(2, "0")}:00+00:00`,
+        session_id: `session-${index + 1}`
+      }))
+    : [
+        {
+          run_id: "run-1",
+          workload_name: "demo-agent",
+          status: "running",
+          user: "admin",
+          created_at: "2026-05-26T08:01:00+00:00",
+          session_id: "session1"
+        }
+      ];
   const apiKeys: Array<Record<string, unknown>> = [];
   const users: Array<Record<string, unknown>> = [];
   const teams: Array<Record<string, unknown>> = [
@@ -210,6 +268,11 @@ async function mockApi(page: Page, options: { paginatedAgentData?: boolean } = {
         contentType: "application/json",
         body: JSON.stringify(body)
       });
+    };
+    const pageItems = <T,>(items: T[]) => {
+      const limit = Number(url.searchParams.get("limit") || items.length);
+      const offset = Number(url.searchParams.get("offset") || 0);
+      return items.slice(offset, offset + limit);
     };
 
     if (path === "/auth/token" && method === "POST") {
@@ -577,7 +640,7 @@ async function mockApi(page: Page, options: { paginatedAgentData?: boolean } = {
     }
 
     if (path === "/v1/deployment-operations" && method === "GET") {
-      await json(deploymentOperations);
+      await json(pageItems(deploymentOperations));
       return;
     }
 
@@ -685,17 +748,7 @@ async function mockApi(page: Page, options: { paginatedAgentData?: boolean } = {
         ]);
         return;
       }
-      await json([
-        {
-          event_id: "1",
-          timestamp: "2026-05-26T08:01:00+00:00",
-          actor: "admin",
-          action: "agent.message",
-          resource_type: "agent_session",
-          resource_id: "session1",
-          metadata: { agent_name: "demo-agent", run_id: "run-1" }
-        }
-      ]);
+      await json(pageItems(auditEvents));
       return;
     }
 
@@ -878,16 +931,7 @@ async function mockApi(page: Page, options: { paginatedAgentData?: boolean } = {
         ]);
         return;
       }
-      await json([
-        {
-          run_id: "run-1",
-          workload_name: "demo-agent",
-          status: "running",
-          user: "admin",
-          created_at: "2026-05-26T08:01:00+00:00",
-          session_id: "session1"
-        }
-      ]);
+      await json(pageItems(runs));
       return;
     }
 
@@ -1205,6 +1249,33 @@ test("opens paginated agent history from a deep-linked session", async ({ page }
   await expect(page.getByText("history-1", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Load earlier messages" }).click();
   await expect(page.getByText("history-1", { exact: true })).toBeVisible();
+});
+
+test("loads additional runs, operations, and audit pages", async ({ page }) => {
+  await mockApi(page, { paginatedOperationsData: true });
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await page.getByRole("navigation").getByRole("link", { name: "Runs" }).click();
+  await expect(page.getByRole("link", { name: "page-001" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Load more runs" })).toBeVisible();
+  await page.getByRole("button", { name: "Load more runs" }).click();
+  await expect(page.getByRole("link", { name: "page-051" })).toBeVisible();
+
+  await page.goto("/operations");
+  await expect(page.getByRole("heading", { name: "Deployment Operations" })).toBeVisible();
+  await expect(page.getByText("op001")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Load more operations" })).toBeVisible();
+  await page.getByRole("button", { name: "Load more operations" }).click();
+  await expect(page.getByText("op051")).toBeVisible();
+
+  await expect(page.getByRole("heading", { name: "Audit Trail" })).toBeVisible();
+  await expect(page.getByText("audit-001")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Load more audit events" })).toBeVisible();
+  await page.getByRole("button", { name: "Load more audit events" }).click();
+  await expect(page.getByText("audit-051")).toBeVisible();
 });
 
 test("creates a team-scoped workload without editing the manifest", async ({ page }) => {

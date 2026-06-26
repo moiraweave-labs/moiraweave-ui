@@ -99,6 +99,12 @@ export function Runs() {
             {!canOperate && (
               <PermissionNotice minimumRole="operator" action="Submitting runs" />
             )}
+            {workloads.error && (
+              <ErrorMessage
+                error={workloads.error}
+                fallback="Unable to load workloads for run submission."
+              />
+            )}
             <div>
               <label className="mb-1.5 block text-[10px] font-bold uppercase tracking-wider text-slate-400">Workload</label>
               <select
@@ -173,7 +179,18 @@ export function Runs() {
         </button>
       </div>
 
-      <RunsTable runs={data} />
+      {runs.error ? (
+        <Panel title="Run List">
+          <div className="p-5">
+            <ErrorMessage
+              error={runs.error}
+              fallback="Unable to load runs for the selected filters."
+            />
+          </div>
+        </Panel>
+      ) : (
+        <RunsTable runs={data} />
+      )}
       {runs.hasNextPage && (
         <div className="flex justify-center">
           <button

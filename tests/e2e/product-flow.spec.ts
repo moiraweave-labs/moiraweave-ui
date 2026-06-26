@@ -136,6 +136,7 @@ async function mockApi(
     artifactLibraryFailure?: boolean;
     paginatedAgentData?: boolean;
     paginatedOperationsData?: boolean;
+    runsFailure?: boolean;
     sessionsFailure?: boolean;
     streamFailure?: boolean;
   } = {}
@@ -964,6 +965,10 @@ async function mockApi(
     }
 
     if (path === "/v1/runs" && method === "GET") {
+      if (options.runsFailure) {
+        await json({ detail: "run index unavailable" }, 503);
+        return;
+      }
       const env = url.searchParams.get("env");
       if (env === "prod") {
         await json([
@@ -1332,6 +1337,18 @@ test("shows an artifact library error instead of an empty result", async ({ page
 
   await expect(page.getByText("artifact index unavailable")).toBeVisible();
   await expect(page.getByText("No artifacts match the current filters")).toHaveCount(0);
+});
+
+test("shows a run list error instead of an empty run table", async ({ page }) => {
+  await mockApi(page, { runsFailure: true });
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("navigation").getByRole("link", { name: "Runs" }).click();
+
+  await expect(page.getByText("run index unavailable")).toBeVisible();
+  await expect(page.getByText("No runs found")).toHaveCount(0);
 });
 
 test("shows an actionable error when agent sessions cannot load", async ({ page }) => {

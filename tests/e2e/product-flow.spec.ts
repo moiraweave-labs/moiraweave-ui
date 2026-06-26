@@ -136,6 +136,9 @@ async function mockApi(
     artifactLibraryFailure?: boolean;
     paginatedAgentData?: boolean;
     paginatedOperationsData?: boolean;
+    runArtifactsFailure?: boolean;
+    runDetailFailure?: boolean;
+    runEventsFailure?: boolean;
     runsFailure?: boolean;
     sessionsFailure?: boolean;
     streamFailure?: boolean;
@@ -993,6 +996,10 @@ async function mockApi(
     }
 
     if (path === "/v1/runs/run-1" && method === "GET") {
+      if (options.runDetailFailure) {
+        await json({ detail: "run status unavailable" }, 503);
+        return;
+      }
       await json({
         run_id: "run-1",
         workload_name: "demo-agent",
@@ -1009,6 +1016,10 @@ async function mockApi(
     }
 
     if (path === "/v1/runs/run-1/events" && method === "GET") {
+      if (options.runEventsFailure) {
+        await json({ detail: "run event timeline unavailable" }, 503);
+        return;
+      }
       await json([
         {
           id: "event-1",
@@ -1046,6 +1057,10 @@ async function mockApi(
     }
 
     if (path === "/v1/runs/run-1/artifacts" && method === "GET") {
+      if (options.runArtifactsFailure) {
+        await json({ detail: "run artifacts unavailable" }, 503);
+        return;
+      }
       await json([
         {
           id: "artifact-1",
@@ -1365,6 +1380,24 @@ test("shows a workload list error instead of an empty workload table", async ({ 
 
   await expect(page.getByText("workload index unavailable")).toBeVisible();
   await expect(page.getByText("No workloads registered")).toHaveCount(0);
+});
+
+test("shows run detail errors without misleading empty timeline or artifacts", async ({ page }) => {
+  await mockApi(page, {
+    runArtifactsFailure: true,
+    runDetailFailure: true,
+    runEventsFailure: true
+  });
+  await page.goto("/runs/run-1");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByText("run status unavailable")).toBeVisible();
+  await expect(page.getByText("run event timeline unavailable")).toBeVisible();
+  await expect(page.getByText("run artifacts unavailable")).toBeVisible();
+  await expect(page.getByText("No events recorded for this run")).toHaveCount(0);
+  await expect(page.getByText("No artifacts generated")).toHaveCount(0);
 });
 
 test("shows an actionable error when agent sessions cannot load", async ({ page }) => {

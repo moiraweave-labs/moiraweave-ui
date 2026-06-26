@@ -5,6 +5,7 @@ import { api, streamRunEvents } from "../api";
 import type { RunEvent } from "../api";
 import { useAuthProfile } from "../auth";
 import { ArtifactDetails } from "../components/ArtifactDetails";
+import { ErrorMessage, Panel } from "../components/common";
 import {
   ProducedArtifactsPanel,
   RunDiagnosticsPanel,
@@ -119,17 +120,28 @@ export function RunDetail() {
           canOperate={canOperate}
           onCancel={() => cancel.mutate()}
         />
-        <RunDiagnosticsPanel
-          current={current}
-          events={timeline}
-          artifactCount={producedArtifacts.length}
-        />
+        {run.error ? (
+          <Panel title="Run Status">
+            <div className="p-5">
+              <ErrorMessage
+                error={run.error}
+                fallback="Unable to load run status."
+              />
+            </div>
+          </Panel>
+        ) : (
+          <RunDiagnosticsPanel
+            current={current}
+            events={timeline}
+            artifactCount={producedArtifacts.length}
+          />
+        )}
         <RunLiveEventsPanel
           stream={streamStatus}
           storedCount={events.data?.length || 0}
           streamedCount={streamedEvents.length}
         />
-        <RunEventTimeline events={timeline} />
+        <RunEventTimeline events={timeline} error={events.error} />
       </div>
 
       <div className="space-y-6">
@@ -140,6 +152,7 @@ export function RunDetail() {
         />
         <ProducedArtifactsPanel
           artifacts={producedArtifacts}
+          error={artifacts.error}
           selectedArtifactId={selectedArtifact?.id}
           onSelect={setSelectedArtifactId}
         />

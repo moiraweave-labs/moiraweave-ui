@@ -12,7 +12,7 @@ import {
 import { Link } from "react-router-dom";
 import type { Artifact, RunEvent, RunStatus } from "../api";
 import { formatDate, isActiveRunStatus } from "../utils";
-import { Metric, Panel, RowMessage, StateBadge } from "./common";
+import { ErrorMessage, Metric, Panel, RowMessage, StateBadge } from "./common";
 
 export type RunMetrics = {
   total: number;
@@ -307,10 +307,24 @@ function runDiagnosis(
   };
 }
 
-export function RunEventTimeline({ events }: { events: RunEvent[] }) {
+export function RunEventTimeline({
+  events,
+  error
+}: {
+  events: RunEvent[];
+  error?: unknown;
+}) {
   return (
     <Panel title="Event Timeline">
       <div className="p-6">
+        {error ? (
+          <div className="mb-5">
+            <ErrorMessage
+              error={error}
+              fallback="Unable to load persisted run events."
+            />
+          </div>
+        ) : null}
         <div className="relative border-l-2 border-slate-800/80 ml-2.5 space-y-6">
           {events.map((event) => (
             <div key={event.id} className="relative pl-7 group">
@@ -334,7 +348,7 @@ export function RunEventTimeline({ events }: { events: RunEvent[] }) {
               </div>
             </div>
           ))}
-          {events.length === 0 && (
+          {events.length === 0 && !error && (
             <div className="text-center py-6 text-sm text-slate-500">No events recorded for this run</div>
           )}
         </div>
@@ -365,16 +379,26 @@ export function RunPayloadPanel({
 
 export function ProducedArtifactsPanel({
   artifacts,
+  error,
   selectedArtifactId,
   onSelect
 }: {
   artifacts: Artifact[];
+  error?: unknown;
   selectedArtifactId?: string | null;
   onSelect: (artifactId: string) => void;
 }) {
   return (
     <Panel title="Produced Artifacts">
       <div className="divide-y divide-slate-800/60 max-h-96 overflow-y-auto">
+        {error ? (
+          <div className="p-4">
+            <ErrorMessage
+              error={error}
+              fallback="Unable to load run artifacts."
+            />
+          </div>
+        ) : null}
         {artifacts.map((artifact) => (
           <button
             key={artifact.id}
@@ -389,7 +413,7 @@ export function ProducedArtifactsPanel({
             <div className="break-all font-mono text-[10px] text-slate-500 mt-1">{artifact.uri}</div>
           </button>
         ))}
-        {artifacts.length === 0 && (
+        {artifacts.length === 0 && !error && (
           <div className="p-5 text-center text-xs text-slate-500">No artifacts generated</div>
         )}
       </div>

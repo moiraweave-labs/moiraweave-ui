@@ -134,6 +134,11 @@ async function mockApi(
   page: Page,
   options: {
     artifactLibraryFailure?: boolean;
+    auditEventsFailure?: boolean;
+    deploymentsFailure?: boolean;
+    deploymentOperationsFailure?: boolean;
+    environmentsFailure?: boolean;
+    operationsAlertsFailure?: boolean;
     paginatedAgentData?: boolean;
     paginatedOperationsData?: boolean;
     runArtifactsFailure?: boolean;
@@ -652,11 +657,19 @@ async function mockApi(
     }
 
     if (path === "/v1/deployments" && method === "GET") {
+      if (options.deploymentsFailure) {
+        await json({ detail: "deployment records unavailable" }, 503);
+        return;
+      }
       await json([]);
       return;
     }
 
     if (path === "/v1/environments" && method === "GET") {
+      if (options.environmentsFailure) {
+        await json({ detail: "environment index unavailable" }, 503);
+        return;
+      }
       await json([
         { name: "local", deployment_count: 0, operation_count: 0, workload_count: 0 },
         { name: "dev", deployment_count: 0, operation_count: 0, workload_count: 0 },
@@ -667,6 +680,10 @@ async function mockApi(
     }
 
     if (path === "/v1/operations/alerts" && method === "GET") {
+      if (options.operationsAlertsFailure) {
+        await json({ detail: "operations alerts unavailable" }, 503);
+        return;
+      }
       await json([]);
       return;
     }
@@ -712,6 +729,10 @@ async function mockApi(
     }
 
     if (path === "/v1/deployment-operations" && method === "GET") {
+      if (options.deploymentOperationsFailure) {
+        await json({ detail: "deployment operations unavailable" }, 503);
+        return;
+      }
       await json(pageItems(deploymentOperations));
       return;
     }
@@ -806,6 +827,10 @@ async function mockApi(
     }
 
     if (path === "/v1/audit-events" && method === "GET") {
+      if (options.auditEventsFailure) {
+        await json({ detail: "audit trail unavailable" }, 503);
+        return;
+      }
       if (url.searchParams.get("env") === "prod") {
         await json([
           {
@@ -1474,6 +1499,31 @@ test("loads additional runs, operations, and audit pages", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Load more audit events" })).toBeVisible();
   await page.getByRole("button", { name: "Load more audit events" }).click();
   await expect(page.getByText("audit-051")).toBeVisible();
+});
+
+test("shows operations center list errors without misleading empty states", async ({ page }) => {
+  await mockApi(page, {
+    auditEventsFailure: true,
+    deploymentsFailure: true,
+    deploymentOperationsFailure: true,
+    environmentsFailure: true,
+    operationsAlertsFailure: true
+  });
+  await page.goto("/operations?workload=demo-agent");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByText("environment index unavailable")).toBeVisible();
+  await expect(page.getByText("operations alerts unavailable")).toBeVisible();
+  await expect(page.getByText("deployment records unavailable").first()).toBeVisible();
+  await expect(page.getByText("deployment operations unavailable").first()).toBeVisible();
+  await expect(page.getByText("audit trail unavailable")).toBeVisible();
+  await expect(page.getByText("No environment records yet.")).toHaveCount(0);
+  await expect(page.getByText("No actionable platform alerts for the selected environment.")).toHaveCount(0);
+  await expect(page.getByText("No deployment records yet")).toHaveCount(0);
+  await expect(page.getByText("No deployment operations recorded")).toHaveCount(0);
+  await expect(page.getByText("No audit events match the current filters")).toHaveCount(0);
 });
 
 test("creates a team-scoped workload without editing the manifest", async ({ page }) => {

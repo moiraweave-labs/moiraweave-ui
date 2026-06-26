@@ -37,7 +37,7 @@ export function EnvironmentOverviewPanel({
               Loading environments...
             </div>
           )}
-          {!isLoading && environments.length === 0 && (
+          {!isLoading && !error && environments.length === 0 && (
             <div className="rounded-lg border border-slate-800 bg-[#050811] p-4 text-xs text-slate-500 md:col-span-4">
               No environment records yet.
             </div>
@@ -1127,10 +1127,21 @@ function ExecutionModeBadge({
   );
 }
 
-export function DeploymentsPanel({ deployments }: { deployments: Deployment[] }) {
+export function DeploymentsPanel({
+  deployments,
+  error
+}: {
+  deployments: Deployment[];
+  error?: unknown;
+}) {
   return (
     <Panel title="Deployments">
       <div className="divide-y divide-slate-800/50">
+        {error ? (
+          <div className="p-5">
+            <ErrorMessage error={error} fallback="Unable to load deployment records." />
+          </div>
+        ) : null}
         {deployments.map((deployment) => (
           <div
             key={deployment.deployment_id}
@@ -1143,7 +1154,7 @@ export function DeploymentsPanel({ deployments }: { deployments: Deployment[] })
             <span className="break-all font-mono text-[10px] text-slate-500">{deployment.endpoint || "-"}</span>
           </div>
         ))}
-        {deployments.length === 0 && (
+        {deployments.length === 0 && !error && (
           <div className="p-6 text-center text-xs text-slate-500">No deployment records yet</div>
         )}
       </div>
@@ -1152,6 +1163,7 @@ export function DeploymentsPanel({ deployments }: { deployments: Deployment[] })
 }
 
 export function DeploymentOperationsPanel({
+  error,
   operations,
   hasNextPage,
   isFetchingNextPage,
@@ -1159,6 +1171,7 @@ export function DeploymentOperationsPanel({
   selectedOperationId,
   onSelect
 }: {
+  error?: unknown;
   operations: DeploymentOperation[];
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
@@ -1169,6 +1182,11 @@ export function DeploymentOperationsPanel({
   return (
     <Panel title="Deployment Operations">
       <div className="divide-y divide-slate-800/50">
+        {error ? (
+          <div className="p-5">
+            <ErrorMessage error={error} fallback="Unable to load deployment operations." />
+          </div>
+        ) : null}
         {operations.map((item) => (
           <button
             key={item.operation_id}
@@ -1191,7 +1209,7 @@ export function DeploymentOperationsPanel({
             <span className="text-[10px] text-slate-500">{formatDate(item.created_at)}</span>
           </button>
         ))}
-        {operations.length === 0 && (
+        {operations.length === 0 && !error && (
           <div className="p-6 text-center text-xs text-slate-500">
             No deployment operations recorded
           </div>
@@ -1214,11 +1232,13 @@ export function DeploymentOperationsPanel({
 }
 
 export function ControllerQueuePanel({
+  error,
   operations,
   target,
   env,
   onSelect
 }: {
+  error?: unknown;
   operations: DeploymentOperation[];
   target: string;
   env: string;
@@ -1258,6 +1278,11 @@ export function ControllerQueuePanel({
           </div>
         </div>
         <div className="divide-y divide-slate-800/50 rounded-lg border border-slate-800 bg-[#050811]">
+          {error ? (
+            <div className="p-4">
+              <ErrorMessage error={error} fallback="Unable to load controller operations." />
+            </div>
+          ) : null}
           {controllerOperations.map((operation) => (
             <button
               key={operation.operation_id}
@@ -1277,7 +1302,7 @@ export function ControllerQueuePanel({
               </span>
             </button>
           ))}
-          {controllerOperations.length === 0 && (
+          {controllerOperations.length === 0 && !error && (
             <div className="p-4 text-center text-xs text-slate-500">
               No queued or running controller operations for the selected filters.
             </div>
@@ -1392,7 +1417,7 @@ export function AuditEventsPanel({
             </pre>
           </div>
         ))}
-        {events.length === 0 && (
+        {events.length === 0 && !error && (
           <div className="p-6 text-center text-xs text-slate-500">
             {isLoading ? "Loading audit events..." : "No audit events match the current filters"}
           </div>

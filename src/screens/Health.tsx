@@ -29,7 +29,7 @@ import type {
 } from "../api";
 import { useAuthProfile } from "../auth";
 import { COMMON_ENVIRONMENTS, SAMPLE_DEPLOYMENT_METADATA } from "../constants";
-import { HealthTile, Panel, PermissionNotice, StateBadge } from "../components/common";
+import { ErrorMessage, HealthTile, Panel, PermissionNotice, StateBadge } from "../components/common";
 import {
   AuditEventsPanel,
   CommandCompanionPanel,
@@ -149,8 +149,8 @@ function OperationsAlertsPanel({
           </div>
         )}
         {!isLoading && Boolean(error) && (
-          <div className="px-5 py-6 text-xs text-rose-300">
-            Unable to load operations alerts.
+          <div className="p-5">
+            <ErrorMessage error={error} fallback="Unable to load operations alerts." />
           </div>
         )}
         {!isLoading && !error && alerts.length === 0 && (
@@ -228,6 +228,7 @@ function platformCheckAction(name: string, check: ReadinessCheck): string | null
 function AgentOperationsPanel({
   deployments,
   env,
+  error,
   isLoading,
   runs,
   target,
@@ -235,6 +236,7 @@ function AgentOperationsPanel({
 }: {
   deployments: Deployment[];
   env: string;
+  error?: unknown;
   isLoading: boolean;
   runs: RunStatus[];
   target: string;
@@ -248,7 +250,12 @@ function AgentOperationsPanel({
         {isLoading && (
           <div className="px-5 py-6 text-xs text-slate-500">Loading agent operations...</div>
         )}
-        {!isLoading && agents.length === 0 && (
+        {!isLoading && error ? (
+          <div className="p-5">
+            <ErrorMessage error={error} fallback="Unable to load agent operations." />
+          </div>
+        ) : null}
+        {!isLoading && !error && agents.length === 0 && (
           <div className="px-5 py-6 text-xs text-slate-500">
             No agent workloads have been created yet.
           </div>
@@ -825,6 +832,7 @@ export function Health() {
       <AgentOperationsPanel
         deployments={deployments.data || []}
         env={planEnv}
+        error={workloads.error || runs.error || deployments.error}
         isLoading={workloads.isLoading || runs.isLoading || deployments.isLoading}
         runs={runs.data || []}
         target={target}
@@ -1041,14 +1049,16 @@ export function Health() {
       </Panel>
       {target === "kubernetes" && (
         <ControllerQueuePanel
+          error={deploymentOperations.error}
           operations={deploymentOperationItems}
           target={target}
           env={planEnv}
           onSelect={setOperation}
         />
       )}
-      <DeploymentsPanel deployments={deployments.data || []} />
+      <DeploymentsPanel deployments={deployments.data || []} error={deployments.error} />
       <DeploymentOperationsPanel
+        error={deploymentOperations.error}
         operations={deploymentOperationItems}
         hasNextPage={deploymentOperations.hasNextPage}
         isFetchingNextPage={deploymentOperations.isFetchingNextPage}

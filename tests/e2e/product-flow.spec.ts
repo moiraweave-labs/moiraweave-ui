@@ -132,7 +132,11 @@ const openClawWorkload: Workload = {
 
 async function mockApi(
   page: Page,
-  options: { paginatedAgentData?: boolean; paginatedOperationsData?: boolean } = {}
+  options: {
+    paginatedAgentData?: boolean;
+    paginatedOperationsData?: boolean;
+    streamFailure?: boolean;
+  } = {}
 ) {
   const workloads: Workload[] = [];
   const sessions: Array<{
@@ -1003,6 +1007,10 @@ async function mockApi(
     }
 
     if (path === "/v1/runs/run-1/events/stream" && method === "GET") {
+      if (options.streamFailure) {
+        await json({ detail: "stream unavailable" }, 503);
+        return;
+      }
       await route.fulfill({
         status: 200,
         headers: { "content-type": "text/event-stream" },
@@ -1164,14 +1172,16 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByRole("button", { name: "Inspect" })).toBeVisible();
   await expect(page.getByText("1 artifact")).toBeVisible();
   await expect(page.getByText("Turn Details")).toBeVisible();
-  await expect(page.getByText("Live Turn Stream")).toBeVisible();
+  await expect(page.getByText("Live Turn Stream", { exact: true })).toBeVisible();
   await expect(
     page.getByText("Receiving live turn events from the API gateway.")
   ).toBeVisible();
   await expect(page.getByText("1 live event")).toBeVisible();
   await expect(page.getByText("Recent Events")).toBeVisible();
   await expect(page.getByText("Produced Artifacts")).toBeVisible();
-  await expect(page.getByText("Dispatching message to agent runtime")).toBeVisible();
+  await expect(
+    page.getByText("Dispatching message to agent runtime", { exact: true })
+  ).toBeVisible();
   await expect(page.getByText("demo-reply.json")).toBeVisible();
 
   await page.getByRole("link", { name: "Open Run" }).click();
@@ -1275,6 +1285,31 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByText("operation-prod")).toBeVisible();
   await expect(page.getByRole("link", { name: "run-prod" })).toBeVisible();
   await expect(page.getByRole("link", { name: "run-1" })).toHaveCount(0);
+});
+
+test("keeps agent chat usable when the live turn stream degrades", async ({ page }) => {
+  await mockApi(page, { streamFailure: true });
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("link", { name: "Open agent console" }).click();
+  await page.getByRole("button", { name: "Start session" }).first().click();
+  await page.getByPlaceholder("Message demo-agent...").fill("hello");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect(page.getByText("Live Turn Stream", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(
+      "Live turn stream degraded. Persisted events still refresh from the API."
+    )
+  ).toBeVisible();
+  await expect(page.getByText("0 live events")).toBeVisible();
+  await expect(
+    page.getByText("Dispatching message to agent runtime", { exact: true })
+  ).toBeVisible();
+  await expect(page.getByText("Runtime replied with artifact")).not.toBeVisible();
 });
 
 test("opens paginated agent history from a deep-linked session", async ({ page }) => {

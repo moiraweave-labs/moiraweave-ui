@@ -1164,6 +1164,11 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByRole("button", { name: "Inspect" })).toBeVisible();
   await expect(page.getByText("1 artifact")).toBeVisible();
   await expect(page.getByText("Turn Details")).toBeVisible();
+  await expect(page.getByText("Live Turn Stream")).toBeVisible();
+  await expect(
+    page.getByText("Receiving live turn events from the API gateway.")
+  ).toBeVisible();
+  await expect(page.getByText("1 live event")).toBeVisible();
   await expect(page.getByText("Recent Events")).toBeVisible();
   await expect(page.getByText("Produced Artifacts")).toBeVisible();
   await expect(page.getByText("Dispatching message to agent runtime")).toBeVisible();

@@ -1,12 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
-import { Activity, Archive } from "lucide-react";
+import { Activity, Archive, Radio } from "lucide-react";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import type { AgentMessage, Artifact, RunEvent } from "../api";
 import { formatDate, isActiveRunStatus } from "../utils";
 import { StateBadge } from "./common";
+import type { RunStreamStatus } from "./runs";
 
-export function AgentTurnDetails({ message }: { message?: AgentMessage }) {
+export type AgentTurnStreamStatus = RunStreamStatus & {
+  liveEventCount: number;
+};
+
+export function AgentTurnDetails({
+  message,
+  stream
+}: {
+  message?: AgentMessage;
+  stream?: AgentTurnStreamStatus;
+}) {
   const runId = message?.run_id;
   const events = useQuery({
     queryKey: ["events", runId],
@@ -61,6 +72,32 @@ export function AgentTurnDetails({ message }: { message?: AgentMessage }) {
           </Link>
         </div>
       </div>
+
+      {stream && (
+        <div
+          className={`mb-4 rounded-lg border px-3 py-2 text-xs ${streamTone(
+            stream.status
+          )}`}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-100">
+              <Radio className="h-3.5 w-3.5" />
+              Live Turn Stream
+            </span>
+            <StateBadge state={stream.status} />
+          </div>
+          <div className="mt-1">{stream.message}</div>
+          <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-slate-400">
+            <span>
+              {stream.liveEventCount} live event
+              {stream.liveEventCount === 1 ? "" : "s"}
+            </span>
+            {stream.lastEventAt && (
+              <span>Last signal: {formatDate(stream.lastEventAt)}</span>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[1fr_280px]">
         <div>
@@ -144,4 +181,11 @@ function mergeTurnEvents(events: RunEvent[], latestEvent?: RunEvent | null) {
   events.forEach((event) => merged.set(event.id, event));
   if (latestEvent) merged.set(latestEvent.id, latestEvent);
   return Array.from(merged.values());
+}
+
+function streamTone(status: AgentTurnStreamStatus["status"]): string {
+  if (status === "degraded") return "border-red-500/20 bg-red-500/10 text-red-200";
+  if (status === "live") return "border-emerald-500/20 bg-emerald-500/10 text-emerald-100";
+  if (status === "connected") return "border-sky-500/20 bg-sky-500/10 text-sky-100";
+  return "border-amber-500/20 bg-amber-500/10 text-amber-100";
 }

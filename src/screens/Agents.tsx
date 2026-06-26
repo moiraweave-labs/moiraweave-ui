@@ -27,7 +27,10 @@ import type {
   RunEvent
 } from "../api";
 import { useAuthProfile } from "../auth";
-import { AgentTurnDetails } from "../components/AgentTurnDetails";
+import {
+  AgentTurnDetails,
+  type AgentTurnStreamStatus
+} from "../components/AgentTurnDetails";
 import { ChannelPills, Panel, PermissionNotice, StateBadge } from "../components/common";
 import { MessageBubble } from "../components/MessageBubble";
 import {
@@ -56,6 +59,9 @@ export function AgentConsole() {
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>("all");
   const [selectedMessageId, setSelectedMessageId] = useState<string | null>(null);
   const [streamedEvents, setStreamedEvents] = useState<Record<string, RunEvent>>({});
+  const [streamStatuses, setStreamStatuses] = useState<
+    Record<string, AgentTurnStreamStatus>
+  >({});
   const queryClient = useQueryClient();
   const selectedAgent = useMemo(
     () => agents.find((item) => item.name === agent),
@@ -221,11 +227,38 @@ export function AgentConsole() {
 
   useEffect(() => {
     if (!activeRunCursors.length || !agent || !selected?.session_id) return;
+    setStreamStatuses((current) => {
+      const next = { ...current };
+      for (const { runId } of activeRunCursors) {
+        const previous = next[runId];
+        if (!previous || previous.status === "degraded") {
+          next[runId] = {
+            status: "connecting",
+            message: "Opening live turn event stream...",
+            lastEventAt: previous?.lastEventAt,
+            liveEventCount: previous?.liveEventCount || 0
+          };
+        }
+      }
+      return next;
+    });
     const controllers = activeRunCursors.map(({ runId, afterId }) =>
       streamRunEvents(
         runId,
         (event) => {
           setStreamedEvents((current) => ({ ...current, [runId]: event }));
+          setStreamStatuses((current) => {
+            const previous = current[runId];
+            return {
+              ...current,
+              [runId]: {
+                status: "live",
+                message: "Receiving live turn events from the API gateway.",
+                lastEventAt: event.timestamp,
+                liveEventCount: (previous?.liveEventCount || 0) + 1
+              }
+            };
+          });
           queryClient.invalidateQueries({
             queryKey: ["history", agent, selected.session_id]
           });
@@ -236,8 +269,33 @@ export function AgentConsole() {
           queryClient.invalidateQueries({ queryKey: ["artifacts", runId] });
           queryClient.invalidateQueries({ queryKey: ["runs"] });
         },
-        () => undefined,
-        undefined,
+        () =>
+          setStreamStatuses((current) => {
+            const previous = current[runId];
+            return {
+              ...current,
+              [runId]: {
+                status: "degraded",
+                message:
+                  "Live turn stream degraded. Persisted events still refresh from the API.",
+                lastEventAt: previous?.lastEventAt,
+                liveEventCount: previous?.liveEventCount || 0
+              }
+            };
+          }),
+        () =>
+          setStreamStatuses((current) => {
+            const previous = current[runId];
+            return {
+              ...current,
+              [runId]: {
+                status: "connected",
+                message: "Turn stream connected. Waiting for runtime events.",
+                lastEventAt: previous?.lastEventAt,
+                liveEventCount: previous?.liveEventCount || 0
+              }
+            };
+          }),
         { afterId }
       )
     );
@@ -440,7 +498,14 @@ export function AgentConsole() {
               onCancel={(runId) => cancelRun.mutate(runId)}
               onRetry={(text) => retry.mutate(text)}
             />
-            <AgentTurnDetails message={selectedRunMessage} />
+            <AgentTurnDetails
+              message={selectedRunMessage}
+              stream={
+                selectedRunMessage?.run_id
+                  ? streamStatuses[selectedRunMessage.run_id]
+                  : undefined
+              }
+            />
             {history.hasNextPage && (
               <button
                 className="w-full rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800/60 disabled:opacity-50"

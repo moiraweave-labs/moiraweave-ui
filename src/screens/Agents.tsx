@@ -31,7 +31,13 @@ import {
   AgentTurnDetails,
   type AgentTurnStreamStatus
 } from "../components/AgentTurnDetails";
-import { ChannelPills, Panel, PermissionNotice, StateBadge } from "../components/common";
+import {
+  ChannelPills,
+  ErrorMessage,
+  Panel,
+  PermissionNotice,
+  StateBadge
+} from "../components/common";
 import { MessageBubble } from "../components/MessageBubble";
 import {
   agentChannels,
@@ -373,6 +379,24 @@ export function AgentConsole() {
           {!canOperate && (
             <PermissionNotice minimumRole="operator" action="Creating sessions and messaging agents" />
           )}
+          {workloads.error && (
+            <ErrorMessage
+              error={workloads.error}
+              fallback="Unable to load agent workloads."
+            />
+          )}
+          {sessions.error && (
+            <ErrorMessage
+              error={sessions.error}
+              fallback="Unable to load agent sessions."
+            />
+          )}
+          {create.error && (
+            <ErrorMessage
+              error={create.error}
+              fallback="Unable to create agent session."
+            />
+          )}
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Select Agent</label>
             <select
@@ -395,6 +419,20 @@ export function AgentConsole() {
           </div>
 
           <div className="space-y-1.5 max-h-[360px] overflow-y-auto pr-1">
+            {workloads.data && agents.length === 0 && (
+              <div className="rounded-lg border border-dashed border-slate-800 bg-[#090d16]/40 p-4 text-center">
+                <div className="text-xs font-semibold text-slate-300">
+                  No agent workloads yet
+                </div>
+                <Link
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-600"
+                  to="/"
+                >
+                  <Plus className="h-3 w-3" />
+                  Create agent workload
+                </Link>
+              </div>
+            )}
             {sessionItems.map((session) => (
               <button
                 key={session.session_id}
@@ -485,6 +523,27 @@ export function AgentConsole() {
       >
         <div className="flex min-h-[500px] flex-col bg-[#0b0f19]/25 rounded-b-xl border-t border-slate-900">
           <div className="flex-1 space-y-4 overflow-y-auto p-5 max-h-[460px]">
+            {history.error && (
+              <ErrorMessage
+                error={history.error}
+                fallback="Unable to load agent message history."
+              />
+            )}
+            {sessionHealth.error && (
+              <ErrorMessage
+                error={sessionHealth.error}
+                fallback="Unable to load session health."
+              />
+            )}
+            {send.error && (
+              <ErrorMessage error={send.error} fallback="Unable to send message." />
+            )}
+            {retry.error && (
+              <ErrorMessage error={retry.error} fallback="Unable to retry message." />
+            )}
+            {cancelRun.error && (
+              <ErrorMessage error={cancelRun.error} fallback="Unable to cancel run." />
+            )}
             {selected && (
               <AgentSessionHealthSummary
                 health={sessionHealth.data}

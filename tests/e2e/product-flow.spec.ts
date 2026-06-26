@@ -135,6 +135,7 @@ async function mockApi(
   options: {
     paginatedAgentData?: boolean;
     paginatedOperationsData?: boolean;
+    sessionsFailure?: boolean;
     streamFailure?: boolean;
   } = {}
 ) {
@@ -878,6 +879,10 @@ async function mockApi(
     }
 
     if (path === "/v1/agents/demo-agent/sessions" && method === "GET") {
+      if (options.sessionsFailure) {
+        await json({ detail: "session store unavailable" }, 503);
+        return;
+      }
       const limit = Number(url.searchParams.get("limit") || sessions.length);
       const offset = Number(url.searchParams.get("offset") || 0);
       await json(sessions.slice(offset, offset + limit));
@@ -1310,6 +1315,19 @@ test("keeps agent chat usable when the live turn stream degrades", async ({ page
     page.getByText("Dispatching message to agent runtime", { exact: true })
   ).toBeVisible();
   await expect(page.getByText("Runtime replied with artifact")).not.toBeVisible();
+});
+
+test("shows an actionable error when agent sessions cannot load", async ({ page }) => {
+  await mockApi(page, { sessionsFailure: true });
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByRole("button", { name: "Create" }).click();
+  await page.getByRole("link", { name: "Open agent console" }).click();
+
+  await expect(page.getByText("session store unavailable")).toBeVisible();
+  await expect(page.getByText("Ready for Conversation")).toBeVisible();
 });
 
 test("opens paginated agent history from a deep-linked session", async ({ page }) => {

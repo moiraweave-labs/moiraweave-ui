@@ -25,6 +25,7 @@ import {
 import { formatDate } from "../utils";
 
 const ROLE_OPTIONS = ["operator", "viewer", "admin"];
+const MIN_RESET_PASSWORD_LENGTH = 12;
 
 export function Security() {
   const { canAdmin } = useAuthProfile();
@@ -204,7 +205,13 @@ export function Security() {
 
   function submitPasswordReset(event: FormEvent) {
     event.preventDefault();
-    if (!canAdmin || !resetSubject.trim() || resetPassword.length < 8) return;
+    if (
+      !canAdmin ||
+      !resetSubject.trim() ||
+      resetPassword.length < MIN_RESET_PASSWORD_LENGTH
+    ) {
+      return;
+    }
     resetUserPassword.mutate();
   }
 
@@ -437,7 +444,12 @@ export function Security() {
                 />
               )}
               <ActionButton
-                disabled={!canAdmin || resetUserPassword.isPending || !resetSubject.trim() || resetPassword.length < 8}
+                disabled={
+                  !canAdmin ||
+                  resetUserPassword.isPending ||
+                  !resetSubject.trim() ||
+                  resetPassword.length < MIN_RESET_PASSWORD_LENGTH
+                }
                 icon={<KeyRound className="h-4 w-4" />}
                 label="Reset Password"
               />

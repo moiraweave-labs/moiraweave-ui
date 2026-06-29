@@ -151,6 +151,7 @@ async function mockApi(
     securityUsersFailure?: boolean;
     sessionsFailure?: boolean;
     streamFailure?: boolean;
+    templatesFailure?: boolean;
     workloadsFailure?: boolean;
   } = {}
 ) {
@@ -583,6 +584,10 @@ async function mockApi(
     }
 
     if (path === "/v1/templates" && method === "GET") {
+      if (options.templatesFailure) {
+        await json({ detail: "template catalog unavailable" }, 503);
+        return;
+      }
       await json([
         {
           id: "demo-agent",
@@ -1365,6 +1370,18 @@ test("onboards a demo agent, starts chat, and inspects artifacts", async ({ page
   await expect(page.getByText("operation-prod")).toBeVisible();
   await expect(page.getByRole("link", { name: "run-prod" })).toBeVisible();
   await expect(page.getByRole("link", { name: "run-1" })).toHaveCount(0);
+});
+
+test("shows workload template catalog errors before creation", async ({ page }) => {
+  await mockApi(page, { templatesFailure: true });
+  await page.goto("/");
+
+  await page.getByPlaceholder("Password").fill("demo-password");
+  await page.getByRole("button", { name: "Sign in" }).click();
+
+  await expect(page.getByRole("heading", { name: "Create Workload" })).toBeVisible();
+  await expect(page.getByText("template catalog unavailable")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create" })).toBeDisabled();
 });
 
 test("keeps agent chat usable when the live turn stream degrades", async ({ page }) => {

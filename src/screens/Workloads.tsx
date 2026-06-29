@@ -170,7 +170,12 @@ export function Workloads() {
           action={
             <button
               className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-emerald-500/10 transition-all disabled:cursor-not-allowed disabled:opacity-50"
-              disabled={!canAdmin || !templateId || createFromTemplate.isPending}
+              disabled={
+                !canAdmin ||
+                !selectedTemplate ||
+                templates.isLoading ||
+                createFromTemplate.isPending
+              }
               onClick={() => createFromTemplate.mutate()}
             >
               <Plus className="h-3.5 w-3.5" />
@@ -189,6 +194,7 @@ export function Workloads() {
                 className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-slate-700"
                 value={templateId}
                 onChange={(event) => setTemplateId(event.target.value)}
+                disabled={!canAdmin || templates.isLoading || templates.isError}
               >
                 {(templates.data || []).map((template) => (
                   <option key={template.id} value={template.id}>
@@ -197,6 +203,17 @@ export function Workloads() {
                 ))}
               </select>
             </div>
+            {templates.isLoading && (
+              <p className="rounded-lg border border-slate-800 bg-slate-900/40 px-3 py-2 text-xs text-slate-400">
+                Loading workload templates...
+              </p>
+            )}
+            {templates.error && (
+              <ErrorMessage
+                error={templates.error}
+                fallback="Unable to load workload templates."
+              />
+            )}
             {selectedTemplate && (
               <TemplateSummary template={selectedTemplate} />
             )}
@@ -220,6 +237,14 @@ export function Workloads() {
               <p className="mt-1.5 text-[11px] text-slate-500">
                 Team-scoped workloads are only visible and runnable by that team's members.
               </p>
+              {teams.error && (
+                <div className="mt-2">
+                  <ErrorMessage
+                    error={teams.error}
+                    fallback="Unable to load team scopes."
+                  />
+                </div>
+              )}
             </div>
             <div className="grid gap-3">
               {(selectedTemplate?.parameters || []).map((parameter) => (

@@ -10,7 +10,8 @@ import {
   Server,
   XCircle,
   KeyRound,
-  ShieldCheck
+  ShieldCheck,
+  UserPlus
 } from "lucide-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
@@ -166,12 +167,30 @@ function Shell() {
 }
 
 function Login({ onLogin }: { onLogin: (token: string) => void }) {
+  const [mode, setMode] = useState<"signin" | "bootstrap">("signin");
   const [username, setUsername] = useState("admin");
+  const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const login = useMutation({
-    mutationFn: () => api.login(username, password),
+    mutationFn: () =>
+      mode === "bootstrap"
+        ? api.bootstrapAdmin({
+            subject: username,
+            password,
+            display_name: displayName || undefined
+          })
+        : api.login(username, password),
     onSuccess: (token) => onLogin(token.access_token)
   });
+
+  function switchMode(next: "signin" | "bootstrap") {
+    setMode(next);
+    login.reset();
+    if (next === "signin") {
+      setUsername("admin");
+      setDisplayName("");
+    }
+  }
 
   function submit(event: FormEvent) {
     event.preventDefault();
@@ -182,18 +201,75 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
     <div className="mx-auto max-w-md mt-12">
       <Panel title="Sign In to MoiraWeave">
         <form className="space-y-4 p-6" onSubmit={submit}>
+          <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-800 bg-[#050811] p-1">
+            <button
+              type="button"
+              aria-label="Use credential mode"
+              className={`inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
+                mode === "signin"
+                  ? "bg-emerald-500 text-white"
+                  : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-200"
+              }`}
+              onClick={() => switchMode("signin")}
+            >
+              <LogIn className="h-3.5 w-3.5" />
+              Sign in
+            </button>
+            <button
+              type="button"
+              aria-label="Use bootstrap mode"
+              className={`inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
+                mode === "bootstrap"
+                  ? "bg-sky-500 text-white"
+                  : "text-slate-400 hover:bg-slate-800/70 hover:text-slate-200"
+              }`}
+              onClick={() => switchMode("bootstrap")}
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              First admin
+            </button>
+          </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Username</label>
+            <label
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5"
+              htmlFor="login-username"
+            >
+              {mode === "bootstrap" ? "Admin subject" : "Username"}
+            </label>
             <input
+              id="login-username"
               className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3.5 py-2 text-sm text-slate-200 outline-none transition-all focus:border-slate-700 focus:ring-1 focus:ring-slate-700"
               value={username}
               onChange={(event) => setUsername(event.target.value)}
-              placeholder="Username"
+              placeholder={mode === "bootstrap" ? "owner" : "Username"}
             />
           </div>
+          {mode === "bootstrap" && (
+            <div>
+              <label
+                className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5"
+                htmlFor="login-display-name"
+              >
+                Display name
+              </label>
+              <input
+                id="login-display-name"
+                className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3.5 py-2 text-sm text-slate-200 outline-none transition-all focus:border-slate-700 focus:ring-1 focus:ring-slate-700"
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+                placeholder="Owner"
+              />
+            </div>
+          )}
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Password</label>
+            <label
+              className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5"
+              htmlFor="login-password"
+            >
+              Password
+            </label>
             <input
+              id="login-password"
               className="w-full rounded-lg border border-slate-800 bg-[#090d16] px-3.5 py-2 text-sm text-slate-200 outline-none transition-all focus:border-slate-700 focus:ring-1 focus:ring-slate-700"
               type="password"
               value={password}
@@ -204,12 +280,20 @@ function Login({ onLogin }: { onLogin: (token: string) => void }) {
           {login.error && (
             <div className="flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 p-3 text-xs text-red-400">
               <XCircle className="h-4 w-4 shrink-0" />
-              <span>Login failed. Please check credentials.</span>
+              <span>
+                {mode === "bootstrap"
+                  ? "Bootstrap failed. Check that no admin exists and demo auth is disabled."
+                  : "Login failed. Please check credentials."}
+              </span>
             </div>
           )}
           <button className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-500 hover:bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition-all shadow-lg shadow-emerald-500/10">
-            <LogIn className="h-4 w-4" />
-            Sign in
+            {mode === "bootstrap" ? (
+              <UserPlus className="h-4 w-4" />
+            ) : (
+              <LogIn className="h-4 w-4" />
+            )}
+            {mode === "bootstrap" ? "Create first admin" : "Sign in"}
           </button>
         </form>
       </Panel>

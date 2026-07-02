@@ -368,6 +368,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ username, password })
     }),
+  bootstrapAdmin: (body: {
+    subject: string;
+    password: string;
+    display_name?: string | null;
+  }) =>
+    request<TokenResponse>("/auth/bootstrap/admin", {
+      method: "POST",
+      body: JSON.stringify(body)
+    }),
   me: () => request<AuthProfile>("/auth/me"),
   apiKeys: () => request<ApiKey[]>("/auth/api-keys"),
   createApiKey: (body: { name: string; subject: string; role: string; team_id?: string | null }) =>

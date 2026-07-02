@@ -623,6 +623,7 @@ function actionGuideItems({
   env: string;
 }): ActionGuideItem[] {
   const items: ActionGuideItem[] = [];
+  const namespace = env === "local" ? "moiraweave" : `moiraweave-${env || "dev"}`;
   if (missingSecrets.length > 0) {
     const names = missingSecrets.join(", ");
     const localSecretLines = missingSecrets.map((name) => `${name}=...`).join("\\n");
@@ -636,7 +637,7 @@ function actionGuideItems({
       state: "missing",
       command:
         target === "kubernetes"
-          ? `kubectl create secret generic moiraweave-secrets ${kubernetesSecretArgs}`
+          ? `kubectl create secret generic moiraweave-secrets ${kubernetesSecretArgs} --namespace ${namespace}`
           : `printf '${localSecretLines}\\n' >> .env`
     });
   }
@@ -1256,6 +1257,14 @@ export function ControllerQueuePanel({
   const namespace = controllerEnv === "local" ? "moiraweave" : `moiraweave-${controllerEnv}`;
   const cliCommand = `moira deploy controller run --target ${controllerTarget} --env ${controllerEnv} --watch`;
   const secretCommand = `kubectl create secret generic moiraweave-controller-token --from-literal=MOIRA_TOKEN=<admin-token> --namespace ${namespace}`;
+  const platformSecretCommand =
+    "kubectl create secret generic moiraweave-secrets " +
+    "--from-literal=JWT_SECRET_KEY=<32-char-secret> " +
+    "--from-literal=POSTGRES_DSN=postgresql://moiraweave:<postgres-password>@moiraweave-postgresql:5432/moiraweave " +
+    "--from-literal=POSTGRES_PASSWORD=<postgres-password> " +
+    "--from-literal=POSTGRES_POSTGRES_PASSWORD=<postgres-admin-password> " +
+    "--from-literal=REDIS_PASSWORD=<redis-password> " +
+    `--namespace ${namespace}`;
   const helmCommand = `helm upgrade --install moiraweave oci://ghcr.io/moiraweave-labs/charts/moiraweave --namespace ${namespace} --create-namespace --set deploymentController.enabled=true`;
 
   return (
@@ -1273,6 +1282,7 @@ export function ControllerQueuePanel({
           </div>
           <div className="mt-3 grid gap-2">
             <ControllerCommand label="Operator shell" command={cliCommand} />
+            <ControllerCommand label="Platform secrets" command={platformSecretCommand} />
             <ControllerCommand label="Token secret" command={secretCommand} />
             <ControllerCommand label="In-cluster controller" command={helmCommand} />
           </div>

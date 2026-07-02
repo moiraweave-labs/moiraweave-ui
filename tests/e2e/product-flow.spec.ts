@@ -306,6 +306,20 @@ async function mockApi(
       return;
     }
 
+    if (path === "/auth/bootstrap/admin" && method === "POST") {
+      const body = request.postDataJSON() as { subject?: string };
+      await json(
+        {
+          access_token: "ui-owner-token",
+          token_type: "bearer",
+          subject: body.subject || "owner",
+          role: "admin"
+        },
+        201
+      );
+      return;
+    }
+
     if (path === "/auth/me" && method === "GET") {
       await json({
         subject: "admin",
@@ -1518,6 +1532,20 @@ test("loads additional runs, operations, and audit pages", async ({ page }) => {
   await expect(page.getByText("audit-051")).toBeVisible();
 });
 
+test("bootstraps the first admin from the login screen", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Use bootstrap mode" }).click();
+  await page.getByLabel("Admin subject").fill("owner");
+  await page.getByLabel("Display name").fill("Owner");
+  await page.getByLabel("Password").fill("very-strong-password");
+  await page.getByRole("button", { name: "Create first admin" }).click();
+
+  await expect(page.getByPlaceholder("Bearer token")).toHaveValue("ui-owner-token");
+  await expect(page.getByText("Workloads").first()).toBeVisible();
+});
+
 test("shows operations center list errors without misleading empty states", async ({ page }) => {
   await mockApi(page, {
     auditEventsFailure: true,
@@ -1634,6 +1662,12 @@ test("queues kubernetes deployment operations for the cli controller", async ({ 
   await expect(
     page.getByText("kubectl create secret generic moiraweave-controller-token")
   ).toBeVisible();
+  await expect(page.getByText("Platform secrets")).toBeVisible();
+  await expect(page.getByText("kubectl create secret generic moiraweave-secrets").last()).toBeVisible();
+  await expect(
+    page.getByText("--from-literal=POSTGRES_DSN=postgresql://moiraweave").last()
+  ).toBeVisible();
+  await expect(page.getByText("--from-literal=POSTGRES_PASSWORD").last()).toBeVisible();
   await expect(
     page.getByText(
       "helm upgrade --install moiraweave oci://ghcr.io/moiraweave-labs/charts/moiraweave"
